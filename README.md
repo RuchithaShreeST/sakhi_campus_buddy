@@ -22,8 +22,8 @@ configuration, and live service integrations are completed and verified.
 
 ## 🏗️ Architecture & Technology Stack
 
-- **Frontend**: The native reference app uses React Native, Expo SDK 57, and Expo Router. The new web frontend uses React, Vite, TypeScript, Tailwind, and React Router.
-- **Styling & UI**: Custom design system (`src/components/sakhi-ui.tsx`), high-contrast dark mode support, fluid responsive design.
+- **Frontend**: The web frontend uses React, Vite, TypeScript, Tailwind, and React Router. The archived native reference app is isolated under `legacy-expo/`.
+- **Styling & UI**: Web design system under `src/web/components/`, with high-contrast dark mode support and responsive layouts.
 - **State & Storage**: Native app uses AsyncStorage and existing hooks. The web app uses TanStack Query and domain repositories under `src/data/`, with a browser-local demo adapter.
 - **Backend & Database**: Supabase (Postgres, Row Level Security, Auth, Realtime, Storage), Node.js server endpoints for AI proxying.
 - **Testing**: Node unit tests, Vitest component tests, Playwright end-to-end test, TypeScript strict checking, and ESLint.
@@ -56,11 +56,14 @@ configuration, and live service integrations are completed and verified.
 
    The web app defaults to local demo mode (`VITE_DATA_MODE=local`). The Supabase web adapter is currently a typed stub; do not select `supabase` expecting a live connection yet.
 
-4. The retained native Expo app can still be started with:
+4. The archived native Expo reference can be run separately:
    ```bash
-   npm run ios
-   npm run android
+   cd legacy-expo
+   npm install
+   npm run start
    ```
+   `legacy-expo/` is unsupported and retains known dependency advisories. Do not use
+   it for production or real student data; only the root web package is maintained.
 
 5. Run checks and create a production web bundle:
    ```bash
@@ -106,7 +109,8 @@ configuration, and live service integrations are completed and verified.
 src/
 ├── web/                    # Vite routes, screens, shell, theme, and shared UI
 ├── data/                   # Typed domain repositories and local/Supabase adapters
-└── types/                  # Generated Supabase database types
+└── types/                  # Supabase database types
+legacy-expo/                 # Archived Expo app; install separately and do not deploy
 supabase/
 ├── migrations/             # Database source of truth
 └── functions/              # Authenticated Edge Functions

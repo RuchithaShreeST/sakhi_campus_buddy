@@ -44,5 +44,5 @@ yarn-error.*
 example
 
 # generated native folders
-/ios
-/android
+/legacy-expo/ios
+/legacy-expo/android
