@@ -1,7 +1,7 @@
 -- Cross-user, anonymous, RPC, and view access tests.
 -- Run against the local Supabase database with: supabase test db
 begin;
-select plan(34);
+select plan(36);
 
 insert into auth.users (
   id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -390,6 +390,29 @@ select ok(
     union all select 1 from public.mock_interviews
   ),
   'anon cannot read rows from private tables, including opted-in profiles'
+);
+select ok(
+  not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and (
+        coalesce(qual, '') ilike '%is_moderator%'
+        or coalesce(with_check, '') ilike '%is_moderator%'
+      )
+      and 'public' = any(roles)
+  ),
+  'moderator-only policies do not run for anon'
+);
+select lives_ok(
+  $$select
+      (select count(*) from public.posts),
+      (select count(*) from public.comments),
+      (select count(*) from public.clubs),
+      (select count(*) from public.events),
+      (select count(*) from public.placements),
+      (select count(*) from public.announcements)$$,
+  'anon can still query public campus content'
 );
 select ok(
   not exists (
