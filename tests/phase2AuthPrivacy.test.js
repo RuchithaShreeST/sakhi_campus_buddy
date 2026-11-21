@@ -60,10 +60,28 @@ test('Delete-account Edge function requires JWT and service role secret', () => 
 test('Export Edge function queries user-owned scope only', () => {
   const source = fs.readFileSync(path.resolve('supabase/functions/export-my-data/index.ts'), 'utf8');
   assert.match(source, /requireUser/);
-  assert.match(source, /eq\("id", user\.id\)/);
-  assert.match(source, /sender_id\.eq\.\$\{user\.id\}/);
-  assert.match(source, /recipient_id\.eq\.\$\{user\.id\}/);
-  assert.match(source, /requester_id\.eq\.\$\{user\.id\}/);
+  assert.match(source, /USER_DATA_EXPORT/);
+  assert.match(source, /\.range\(offset, offset \+ pageSize - 1\)/);
+});
+
+test('Data export covers every SQL table with a user_id column', () => {
+  const migrationDirectory = path.resolve('supabase/migrations');
+  const migrationFiles = fs.readdirSync(migrationDirectory).filter((file) => file.endsWith('.sql'));
+  const userIdTables = new Set();
+  for (const file of migrationFiles) {
+    const sql = fs.readFileSync(path.join(migrationDirectory, file), 'utf8');
+    for (const match of sql.matchAll(/create table(?: if not exists)?\s+public\.([a-z0-9_]+)\s*\(([\s\S]*?)^\);/gim)) {
+      if (/^\s*user_id\s+/im.test(match[2])) userIdTables.add(match[1]);
+    }
+    for (const match of sql.matchAll(/alter table public\.([a-z0-9_]+)\s+add column(?: if not exists)?\s+user_id\b/gim)) {
+      userIdTables.add(match[1]);
+    }
+  }
+
+  const scope = fs.readFileSync(path.resolve('supabase/functions/_shared/user-data-export.ts'), 'utf8');
+  const exportedTables = new Set([...scope.matchAll(/table:\s*"([a-z0-9_]+)"/g)].map((match) => match[1]));
+  const missingTables = [...userIdTables].filter((table) => !exportedTables.has(table));
+  assert.deepEqual(missingTables, []);
 });
 
 test('Consent Edge function rejects unknown fields and non-booleans', () => {

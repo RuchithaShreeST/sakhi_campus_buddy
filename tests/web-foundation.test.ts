@@ -183,11 +183,20 @@ test('local account export is scoped to the signed-in user and deletion clears b
     logged_on: new Date().toISOString().slice(0, 10),
     mood: 'okay',
   });
+  const ownPost = await localRepositories.circle.createPost({
+    title: 'Private export check',
+    body: 'A new post can be anonymous without losing ownership for export.',
+    category: 'Community',
+    anonymous: true,
+  });
+  const ownComment = await localRepositories.circle.createComment(ownPost.id, 'A reply by the same user.');
 
   const exported = await localRepositories.account.exportData();
   assert.equal(exported.profile?.id, user.id);
   assert.ok(exported.wellness_logs.some((log) => log.id === ownLog.id));
   assert.ok(exported.wellness_logs.every((log) => log.user_id === user.id));
+  assert.ok(exported.posts.some((post) => post.id === ownPost.id && post.author_id === null));
+  assert.ok(exported.comments.some((comment) => comment.id === ownComment.id));
 
   localRepositories.preferences.setTheme('dark');
   await localRepositories.account.deleteAccount();

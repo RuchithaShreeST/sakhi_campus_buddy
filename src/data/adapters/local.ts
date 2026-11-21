@@ -229,6 +229,8 @@ function createInitialState(): LocalState {
     mockInterviews: [],
     posts: [{
       id: 'demo-post',
+      user_id: DEMO_USER_ID,
+      is_anonymous: true,
       author_id: null,
       campus_id: DEMO_CAMPUS_ID,
       title: 'Demo: welcome to Circle',
@@ -914,7 +916,7 @@ export const localRepositories: SakhiRepositories = {
       await latency();
       const state = getState();
       const { anonymous, ...content } = post;
-      const row: PostRow = { id: makeId('post'), author_id: anonymous ? null : activeUserId(), campus_id: null, ...content, trust_label: 'community', moderation_status: 'active', ...stamp() };
+      const row: PostRow = { id: makeId('post'), user_id: activeUserId(), is_anonymous: anonymous, author_id: anonymous ? null : activeUserId(), campus_id: null, ...content, trust_label: 'community', moderation_status: 'active', ...stamp() };
       state.posts.unshift(row);
       saveState(state);
       return row;
@@ -923,7 +925,7 @@ export const localRepositories: SakhiRepositories = {
     createComment: async (postId, body) => {
       await latency();
       const state = getState();
-      const row: CommentRow = { id: makeId('comment'), post_id: postId, author_id: activeUserId(), body, trust_label: 'community', moderation_status: 'active', ...stamp() };
+      const row: CommentRow = { id: makeId('comment'), user_id: activeUserId(), post_id: postId, author_id: activeUserId(), body, trust_label: 'community', moderation_status: 'active', ...stamp() };
       state.comments.push(row);
       saveState(state);
       return row;
@@ -1087,8 +1089,8 @@ export const localRepositories: SakhiRepositories = {
         event_registrations: state.eventRegistrations.filter((item) => item.user_id === userId),
         saved_events: state.savedEvents.filter((item) => item.user_id === userId),
         placement_registrations: state.placementRegistrations.filter((item) => item.user_id === userId),
-        posts: state.posts.filter((item) => item.author_id === userId),
-        comments: state.comments.filter((item) => item.author_id === userId),
+        posts: state.posts.filter((item) => item.user_id === userId || (item.user_id == null && item.author_id === userId)),
+        comments: state.comments.filter((item) => item.user_id === userId || (item.user_id == null && item.author_id === userId)),
         reactions: state.reactions.filter((item) => item.user_id === userId),
         connections: state.connections.filter((item) => item.requester_id === userId || item.recipient_id === userId),
         messages: state.messages.filter((item) => item.sender_id === userId || item.recipient_id === userId),

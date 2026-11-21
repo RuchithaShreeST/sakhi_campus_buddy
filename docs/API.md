@@ -10,6 +10,13 @@ items, DSA progress, aptitude progress, resume data, and mock interviews.
 Every public content item uses `trust_label`:
 `official`, `verified`, `community`, or `ai_assisted`.
 
+The `export-my-data` function exports every row owned by the authenticated user,
+including profile and campus memberships, consent and wellness data, Sakhi records,
+planner and placement progress, Circle posts/comments/reactions, registrations,
+connections, messages, reports, blocks, notifications, audit entries, and push
+subscriptions. Anonymous Circle posts retain a private `user_id` for ownership,
+export, and deletion; the public `author_id` remains null.
+
 ## Authentication
 
 Use Supabase Auth. The browser may use only `EXPO_PUBLIC_SUPABASE_URL` and

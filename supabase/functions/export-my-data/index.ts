@@ -1,5 +1,6 @@
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { requireUser } from "../_shared/auth.ts";
+import { USER_DATA_EXPORT } from "../_shared/user-data-export.ts";
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
@@ -17,35 +18,27 @@ Deno.serve(async (request) => {
     user_id: user.id,
   };
 
-  const tableNames = [
-    "profiles", "interests", "consents", "wellness_logs", "cycle_entries",
-    "sakhi_memories", "sakhi_conversations", "planner_items", "campus_memberships",
-    "connections", "direct_messages", "notifications",
-  ];
+  const pageSize = 1000;
+  for (const { table, ownerColumns } of USER_DATA_EXPORT) {
+    const rows: unknown[] = [];
+    for (let offset = 0; ; offset += pageSize) {
+      let query = client.from(table).select("*");
+      if (ownerColumns.length === 1) {
+        query = query.eq(ownerColumns[0], user.id);
+      } else {
+        query = query.or(ownerColumns.map((column) => `${column}.eq.${user.id}`).join(","));
+      }
 
-  for (const tableName of tableNames) {
-    let query = client.from(tableName).select("*");
-    if (tableName === "profiles") {
-      query = query.eq("id", user.id);
-    } else if (tableName !== "consents") {
-      const ownerColumn =
-        tableName === "direct_messages" ? "sender_id" :
-        tableName === "connections" ? "requester_id" :
-        "user_id";
-      query = tableName === "direct_messages"
-        ? query.or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
-        : tableName === "connections"
-          ? query.or(`requester_id.eq.${user.id},recipient_id.eq.${user.id}`)
-          : query.eq(ownerColumn, user.id);
-    } else {
-      query = query.eq("user_id", user.id);
+      const { data, error: readError } = await query.range(offset, offset + pageSize - 1);
+      if (readError || !data) {
+        return jsonResponse(request, 500, { error: "Data export failed" });
+      }
+
+      rows.push(...data);
+      if (data.length < pageSize) break;
     }
 
-    const { data, error: readError } = await query;
-    if (readError) {
-      return jsonResponse(request, 500, { error: "Data export failed" });
-    }
-    exported[tableName] = data ?? [];
+    exported[table] = rows;
   }
 
   return jsonResponse(request, 200, exported);
