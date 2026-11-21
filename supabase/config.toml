@@ -19,9 +19,17 @@ port = 54323
 [auth]
 enabled = true
 site_url = "http://localhost:5173"
-additional_redirect_urls = ["http://localhost:5173/**"]
+additional_redirect_urls = [
+  "http://localhost:5173/**",
+  "https://YOUR_PRODUCTION_DOMAIN/**"
+]
 
 [auth.email]
 enable_signup = true
 double_confirm_changes = true
 enable_confirmations = true
+
+[auth.external.google]
+enabled = false
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
