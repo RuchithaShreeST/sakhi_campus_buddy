@@ -419,7 +419,7 @@ select ok(
     select 1
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public'
+    where n.nspname in ('public', 'private')
       and p.prokind = 'f'
       and p.prosecdef
       and has_function_privilege('anon', p.oid, 'execute')
