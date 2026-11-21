@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet } from 'react-router-dom';
 import {
   BookOpenCheck,
+  Bell,
   CalendarDays,
   CircleHelp,
   Compass,
@@ -16,6 +17,7 @@ import { OfflineBanner } from './offline-banner';
 import { Button } from './ui';
 import { cn } from '../lib/cn';
 import { repositories } from '@/data/repositories';
+import { useQuery } from '@tanstack/react-query';
 
 const navigation = [
   { to: '/', label: 'Today', icon: Home, end: true },
@@ -29,6 +31,8 @@ const navigation = [
 
 export function AppShell() {
   const [theme, setTheme] = useState(repositories.preferences.getTheme);
+  const notifications = useQuery({ queryKey: ['notifications'], queryFn: repositories.notifications.list });
+  const unreadCount = notifications.data?.filter((item) => !item.read_at).length ?? 0;
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark';
     repositories.preferences.setTheme(next);
@@ -52,7 +56,14 @@ export function AppShell() {
           <header className="sticky top-0 z-10 flex h-[72px] items-center justify-between border-b border-sakhi-border bg-sakhi-background/90 px-5 backdrop-blur md:px-8">
             <div className="lg:hidden"><Brand compact /></div>
             <div className="hidden text-sm font-medium text-sakhi-muted lg:block">Your campus, your pace.</div>
-            <div className="ml-auto lg:ml-0"><ThemeButton theme={theme} toggle={toggleTheme} /></div>
+            <div className="ml-auto flex items-center gap-2 lg:ml-0">
+              <Link to="/notifications" aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : 'Notifications'} className="relative grid h-11 w-11 place-items-center rounded-xl text-sakhi-muted hover:bg-sakhi-lavender/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sakhi-rose">
+                <Bell aria-hidden="true" size={19} />
+                {unreadCount > 0 && <span aria-hidden="true" className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-sakhi-rose px-1 text-[10px] font-bold text-white">{unreadCount}</span>}
+              </Link>
+              <Link to="/settings" aria-label="Settings" className="grid h-11 w-11 place-items-center rounded-xl text-sakhi-muted hover:bg-sakhi-lavender/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sakhi-rose"><span aria-hidden="true">⚙</span></Link>
+              <ThemeButton theme={theme} toggle={toggleTheme} />
+            </div>
           </header>
           <main className="px-4 pb-28 pt-7 sm:px-7 lg:px-10 lg:pb-10">
             <Outlet />

@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, LabelHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import type { TrustLabel } from '@/types/database';
@@ -34,6 +34,27 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLElement>) {
 
 export function Skeleton({ className }: { className?: string }) {
   return <div aria-hidden="true" className={cn('animate-pulse rounded-lg bg-sakhi-lavender/50 motion-reduce:animate-none', className)} />;
+}
+
+export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  return <input className={cn('min-h-11 w-full rounded-xl border border-sakhi-border bg-sakhi-background px-3 text-sm text-sakhi-ink outline-none placeholder:text-sakhi-muted focus-visible:ring-2 focus-visible:ring-sakhi-rose', className)} {...props} />;
+}
+
+export function TextArea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return <textarea className={cn('min-h-24 w-full rounded-xl border border-sakhi-border bg-sakhi-background px-3 py-2 text-sm text-sakhi-ink outline-none placeholder:text-sakhi-muted focus-visible:ring-2 focus-visible:ring-sakhi-rose', className)} {...props} />;
+}
+
+export function FieldLabel({ className, ...props }: LabelHTMLAttributes<HTMLLabelElement>) {
+  return <label className={cn('mb-1.5 block text-sm font-semibold text-sakhi-ink', className)} {...props} />;
+}
+
+export function InlineMessage({ children, tone = 'error' }: { children: ReactNode; tone?: 'error' | 'success' | 'info' }) {
+  const styles = {
+    error: 'border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-100',
+    success: 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100',
+    info: 'border-sakhi-border bg-sakhi-lavender/20 text-sakhi-ink',
+  };
+  return <div role={tone === 'error' ? 'alert' : 'status'} className={cn('rounded-xl border px-3 py-2 text-sm', styles[tone])}>{children}</div>;
 }
 
 const trustLabels: Record<TrustLabel, string> = {

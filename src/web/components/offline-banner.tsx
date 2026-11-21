@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
 import { WifiOff } from 'lucide-react';
 
-import { getLocalSimulationMode } from '@/data/adapters/local';
-import { dataMode } from '@/data/repositories';
+import { dataMode, repositories } from '@/data/repositories';
 
 export function OfflineBanner() {
   const [offline, setOffline] = useState(false);
 
   useEffect(() => {
-    const update = () => setOffline(getLocalSimulationMode().offline);
+    const update = () => setOffline(repositories.preferences.getRuntimeStatus().offline);
     update();
     window.addEventListener('online', update);
     window.addEventListener('offline', update);

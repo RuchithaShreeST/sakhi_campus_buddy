@@ -1,4 +1,5 @@
 import type {
+  AptitudeProgressRow,
   AnnouncementRow,
   CampusRow,
   ClubMemberRow,
@@ -7,15 +8,18 @@ import type {
   ConsentRow,
   ConnectionRow,
   DirectMessageRow,
+  DsaProgressRow,
   EventRegistrationRow,
   EventRow,
   InterestRow,
   NotificationRow,
+  MockInterviewRow,
   PlacementRegistrationRow,
   PlacementRow,
   PlannerItemRow,
   PostRow,
   ProfileRow,
+  ResumeDataRow,
   ReactionRow,
   ReportRow,
   SakhiConversationRow,
@@ -23,16 +27,17 @@ import type {
   WellnessLogRow,
   CycleEntryRow,
 } from '@/types/database';
-import type { AuthUser, SakhiRepositories, WellnessSummary } from '../contracts';
+import type { AuthUser, NotificationPreferences, SakhiRepositories, WellnessSummary } from '../contracts';
 import { browserPreferences } from './preferences.ts';
 
-const STORAGE_KEY = 'sakhi.web.local.v1';
+const STORAGE_KEY = 'sakhi.web.local.v2';
+const LEGACY_STORAGE_KEY = 'sakhi.web.local.v1';
 const DEMO_CAMPUS_ID = 'demo-campus';
 const DEMO_USER_ID = 'demo-user';
 
 type LocalState = {
   authUser: AuthUser | null;
-  authCredentials: { email: string; salt: string; passwordHash: string }[];
+  authCredentials: { email: string; salt: string; passwordHash: string; userId?: string }[];
   pendingVerification: { user: AuthUser; code: string } | null;
   profile: ProfileRow | null;
   campuses: CampusRow[];
@@ -41,6 +46,7 @@ type LocalState = {
   wellnessLogs: WellnessLogRow[];
   cycleEntries: CycleEntryRow[];
   plannerItems: PlannerItemRow[];
+  dailyTopThree: Record<string, string[]>;
   conversations: SakhiConversationRow[];
   memories: SakhiMemoryRow[];
   announcements: AnnouncementRow[];
@@ -48,8 +54,13 @@ type LocalState = {
   clubMembers: ClubMemberRow[];
   events: EventRow[];
   eventRegistrations: EventRegistrationRow[];
+  savedEvents: { user_id: string; event_id: string }[];
   placements: PlacementRow[];
   placementRegistrations: PlacementRegistrationRow[];
+  dsaProgress: DsaProgressRow[];
+  aptitudeProgress: AptitudeProgressRow[];
+  resumeData: ResumeDataRow | null;
+  mockInterviews: MockInterviewRow[];
   posts: PostRow[];
   comments: CommentRow[];
   reactions: ReactionRow[];
@@ -58,7 +69,38 @@ type LocalState = {
   reports: ReportRow[];
   blocks: { blocker_id: string; blocked_id: string }[];
   notifications: NotificationRow[];
+  notificationPreferences: NotificationPreferences;
 };
+
+const ARRAY_STATE_KEYS = [
+  'authCredentials',
+  'campuses',
+  'interests',
+  'wellnessLogs',
+  'cycleEntries',
+  'plannerItems',
+  'conversations',
+  'memories',
+  'announcements',
+  'clubs',
+  'clubMembers',
+  'events',
+  'eventRegistrations',
+  'savedEvents',
+  'placements',
+  'placementRegistrations',
+  'dsaProgress',
+  'aptitudeProgress',
+  'mockInterviews',
+  'posts',
+  'comments',
+  'reactions',
+  'connections',
+  'messages',
+  'reports',
+  'blocks',
+  'notifications',
+] as const satisfies readonly (keyof LocalState)[];
 
 const now = () => new Date().toISOString();
 const today = () => now().slice(0, 10);
@@ -122,6 +164,7 @@ function createInitialState(): LocalState {
       completed: false,
       ...stamp(),
     }],
+    dailyTopThree: {},
     conversations: [],
     memories: [],
     announcements: [{
@@ -164,6 +207,7 @@ function createInitialState(): LocalState {
       ...stamp(),
     }],
     eventRegistrations: [],
+    savedEvents: [],
     placements: [{
       id: 'demo-placement',
       campus_id: DEMO_CAMPUS_ID,
@@ -179,6 +223,10 @@ function createInitialState(): LocalState {
       ...stamp(),
     }],
     placementRegistrations: [],
+    dsaProgress: [],
+    aptitudeProgress: [],
+    resumeData: null,
+    mockInterviews: [],
     posts: [{
       id: 'demo-post',
       author_id: null,
@@ -205,6 +253,7 @@ function createInitialState(): LocalState {
       read_at: null,
       ...stamp(),
     }],
+    notificationPreferences: { campus: true, planner: true, wellness: true, circle: true },
   };
 }
 
@@ -213,19 +262,63 @@ let memoryState: LocalState | null = null;
 function getState(): LocalState {
   if (memoryState) return memoryState;
   if (typeof window === 'undefined') return (memoryState = createInitialState());
-  const saved = window.localStorage.getItem(STORAGE_KEY);
+  const saved = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
   if (!saved) return (memoryState = createInitialState());
+  let parsed: unknown;
   try {
-    memoryState = JSON.parse(saved) as LocalState;
-    return memoryState;
+    parsed = JSON.parse(saved);
   } catch {
     throw new Error('Local Sakhi data could not be read. Clear local app data to continue.');
   }
+  if (!isRecord(parsed)) throw new Error('Local Sakhi data has an invalid shape. Clear local app data to continue.');
+  for (const key of ARRAY_STATE_KEYS) {
+    if (key in parsed && !Array.isArray(parsed[key])) {
+      throw new Error(`Local Sakhi data has an invalid ${key} value. Clear local app data to continue.`);
+    }
+  }
+  const savedTopThree = parsed.dailyTopThree;
+  if (savedTopThree !== undefined && (!isRecord(savedTopThree) || Object.values(savedTopThree).some((ids) => !isStringArray(ids)))) {
+    throw new Error('Local Sakhi data has invalid daily priorities. Clear local app data to continue.');
+  }
+  const savedNotificationPreferences = parsed.notificationPreferences;
+  if (
+    savedNotificationPreferences !== undefined &&
+    (!isRecord(savedNotificationPreferences) ||
+      Object.keys(savedNotificationPreferences).some((key) => !['campus', 'planner', 'wellness', 'circle'].includes(key)) ||
+      Object.values(savedNotificationPreferences).some((value) => typeof value !== 'boolean'))
+  ) {
+    throw new Error('Local Sakhi data has invalid notification preferences. Clear local app data to continue.');
+  }
+  const defaults = createInitialState();
+  const state = {
+    ...defaults,
+    ...parsed,
+    savedEvents: Array.isArray(parsed.savedEvents) ? parsed.savedEvents : defaults.savedEvents,
+    dsaProgress: Array.isArray(parsed.dsaProgress) ? parsed.dsaProgress : defaults.dsaProgress,
+    aptitudeProgress: Array.isArray(parsed.aptitudeProgress) ? parsed.aptitudeProgress : defaults.aptitudeProgress,
+    mockInterviews: Array.isArray(parsed.mockInterviews) ? parsed.mockInterviews : defaults.mockInterviews,
+    dailyTopThree: isRecord(parsed.dailyTopThree) ? parsed.dailyTopThree : defaults.dailyTopThree,
+    notificationPreferences: isRecord(parsed.notificationPreferences)
+      ? { ...defaults.notificationPreferences, ...parsed.notificationPreferences }
+      : defaults.notificationPreferences,
+  } as LocalState;
+  memoryState = state;
+  saveState(state);
+  window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+  return memoryState;
 }
 
 function saveState(next: LocalState) {
   memoryState = next;
   if (typeof window !== 'undefined') window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
 async function latency() {
@@ -236,6 +329,7 @@ async function latency() {
 }
 
 const activeUserId = () => getState().authUser?.id ?? DEMO_USER_ID;
+const dailyPriorityKey = (userId: string, date: string) => `${userId}:${date}`;
 
 async function digestPassword(password: string, salt: string) {
   const encoded = new TextEncoder().encode(password);
@@ -253,23 +347,28 @@ function userFor(email: string, emailVerified = false): AuthUser {
 }
 
 function buildSummary(logs: WellnessLogRow[], days: number): WellnessSummary {
-  const sleep = logs.filter((log) => log.sleep_hours !== null);
-  const water = logs.filter((log) => log.water_ml !== null);
+  const meaningfulLogs = logs.filter((log) =>
+    log.mood !== null ||
+    log.sleep_hours !== null ||
+    (log.water_ml ?? 0) > 0 ||
+    (log.steps ?? 0) > 0 ||
+    (log.activity_minutes ?? 0) > 0 ||
+    (log.exercise_minutes ?? 0) > 0
+  );
+  const sleep = meaningfulLogs.filter((log) => log.sleep_hours !== null);
+  const water = meaningfulLogs.filter((log) => log.water_ml !== null && log.water_ml > 0);
   const averageSleep = sleep.length ? sleep.reduce((sum, row) => sum + (row.sleep_hours ?? 0), 0) / sleep.length : 0;
   const averageWater = water.length ? water.reduce((sum, row) => sum + (row.water_ml ?? 0), 0) / water.length : 0;
   const breakdown = {
-    sleep: Math.min(24, averageSleep / 8 * 24),
-    movement: Math.min(18, logs.reduce((sum, row) => sum + (row.exercise_minutes ?? 0), 0) / Math.max(logs.length, 1) / 30 * 18),
-    hydration: Math.min(14, averageWater / 2000 * 14),
-    mood: logs.some((row) => row.mood) ? 12 : 0,
-    activity: 0,
-    selfCare: 0,
-    socialJoy: 0,
+    sleep: Math.max(0, Math.min(30, averageSleep / 8 * 30)),
+    movement: Math.max(0, Math.min(20, meaningfulLogs.reduce((sum, row) => sum + (row.exercise_minutes ?? row.activity_minutes ?? 0), 0) / Math.max(meaningfulLogs.length, 1) / 30 * 20)),
+    hydration: Math.max(0, Math.min(25, averageWater / 2000 * 25)),
+    checkIns: meaningfulLogs.some((row) => row.mood !== null) ? 25 : 0,
   };
-  const score = logs.length ? Math.round(Object.values(breakdown).reduce((sum, value) => sum + value, 0)) : null;
-  const burnoutSignal = logs.length >= 3 && (
+  const score = meaningfulLogs.length ? Math.max(0, Math.min(100, Math.round(Object.values(breakdown).reduce((sum, value) => sum + value, 0)))) : null;
+  const burnoutSignal = meaningfulLogs.length >= 3 && (
     (sleep.length > 0 && averageSleep < 6.5) ||
-    logs.filter((row) => ['low', 'stressed', 'tired'].includes(row.mood ?? '')).length >= 2
+    meaningfulLogs.filter((row) => ['low', 'stressed', 'tired'].includes(row.mood ?? '')).length >= 2
   );
   return {
     days,
@@ -310,6 +409,9 @@ function responseFor(message: string) {
       crisisSupport: { phone: '14416', prompt: 'Can you contact a trusted person and let them know you need support right now?' },
     };
   }
+  if (/mock interview reflection/i.test(message)) {
+    return { text: 'Thank you for practising. You might reflect on one specific example, what you did, and what you learned. Keep your answer in your own voice; there is no single perfect response.' };
+  }
   if (/\bstudy|exam|assignment|dsa|placement|interview\b/i.test(message)) {
     return { text: 'Let’s make it manageable: choose one small task, work on it for 25 minutes, then take a real break.' };
   }
@@ -321,6 +423,97 @@ function responseFor(message: string) {
   }
   return { text: 'I’m glad you told me. What would feel like one kind, helpful next step for you right now?' };
 }
+
+const localPlacementPrep: SakhiRepositories['placementPrep'] = {
+  listDsaProgress: async () => {
+    await latency();
+    return getState().dsaProgress.filter((row) => row.user_id === activeUserId() && !row.deleted_at);
+  },
+  saveDsaProgress: async (topic, completedCount, targetCount) => {
+    await latency();
+    if (!Number.isInteger(completedCount) || completedCount < 0 || !Number.isInteger(targetCount) || targetCount < 1 || completedCount > targetCount) {
+      throw new Error('Progress must be a whole number between zero and the target.');
+    }
+    const state = getState();
+    const existing = state.dsaProgress.find((row) => row.user_id === activeUserId() && row.topic === topic);
+    if (existing) {
+      existing.completed_count = completedCount;
+      existing.target_count = targetCount;
+      existing.updated_at = now();
+      saveState(state);
+      return existing;
+    }
+    const row: DsaProgressRow = {
+      id: makeId('dsa'),
+      user_id: activeUserId(),
+      topic,
+      completed_count: completedCount,
+      target_count: targetCount,
+      updated_at: now(),
+      deleted_at: null,
+    };
+    state.dsaProgress.push(row);
+    saveState(state);
+    return row;
+  },
+  listAptitudeProgress: async () => {
+    await latency();
+    return getState().aptitudeProgress.filter((row) => row.user_id === activeUserId() && !row.deleted_at);
+  },
+  saveAptitudeProgress: async (section, score) => {
+    await latency();
+    if (score !== null && (!Number.isFinite(score) || score < 0 || score > 100)) throw new Error('Enter a score from 0 to 100.');
+    const state = getState();
+    const existing = state.aptitudeProgress.find((row) => row.user_id === activeUserId() && row.section === section);
+    if (existing) {
+      existing.score = score;
+      existing.attempts += 1;
+      existing.updated_at = now();
+      saveState(state);
+      return existing;
+    }
+    const row: AptitudeProgressRow = {
+      id: makeId('aptitude'),
+      user_id: activeUserId(),
+      section,
+      score,
+      attempts: 1,
+      updated_at: now(),
+      deleted_at: null,
+    };
+    state.aptitudeProgress.push(row);
+    saveState(state);
+    return row;
+  },
+  getResumeData: async () => {
+    await latency();
+    const resume = getState().resumeData;
+    return resume?.user_id === activeUserId() ? resume.resume_json : null;
+  },
+  saveResumeData: async (resume) => {
+    await latency();
+    const state = getState();
+    state.resumeData = { user_id: activeUserId(), resume_json: resume, updated_at: now(), deleted_at: null };
+    saveState(state);
+  },
+  listMockInterviews: async () => {
+    await latency();
+    return getState().mockInterviews.filter((row) => row.user_id === activeUserId());
+  },
+  saveMockInterview: async (interview) => {
+    await latency();
+    const row: MockInterviewRow = {
+      id: makeId('interview'),
+      user_id: activeUserId(),
+      ...interview,
+      created_at: now(),
+    };
+    const state = getState();
+    state.mockInterviews.unshift(row);
+    saveState(state);
+    return row;
+  },
+};
 
 export const localRepositories: SakhiRepositories = {
   preferences: browserPreferences,
@@ -336,10 +529,10 @@ export const localRepositories: SakhiRepositories = {
       const passwordHash = await digestPassword(password, salt);
       const user = userFor(cleanEmail);
       const code = crypto.randomUUID().replaceAll('-', '').slice(0, 8);
-      state.authCredentials.push({ email: cleanEmail, salt, passwordHash });
+      state.authCredentials.push({ email: cleanEmail, salt, passwordHash, userId: user.id });
       state.pendingVerification = { user, code };
       saveState(state);
-      return { user, verificationRequired: true };
+      return { user, verificationRequired: true, demoVerificationCode: code };
     },
     signIn: async (email, password) => {
       await latency();
@@ -349,7 +542,8 @@ export const localRepositories: SakhiRepositories = {
         throw new Error('Email or password is incorrect.');
       }
       if (state.pendingVerification?.user.email === credential.email) throw new Error('Please verify your email before signing in.');
-      const user: AuthUser = { id: state.profile?.id ?? makeId('user'), email: credential.email, emailVerified: true };
+      const user: AuthUser = { id: credential.userId ?? state.profile?.id ?? makeId('user'), email: credential.email, emailVerified: true };
+      credential.userId = user.id;
       state.authUser = user;
       state.consents.user_id = user.id;
       saveState(state);
@@ -366,11 +560,17 @@ export const localRepositories: SakhiRepositories = {
       saveState(state);
       return user;
     },
-    resetPassword: async (email) => {
+    resetPassword: async (email, newPassword) => {
       await latency();
-      if (!getState().authCredentials.some((item) => item.email === email.trim().toLowerCase())) {
+      const credential = getState().authCredentials.find((item) => item.email === email.trim().toLowerCase());
+      if (!credential) {
         throw new Error('No local demo account exists for that email.');
       }
+      if (newPassword.length < 8) throw new Error('Use a password with at least 8 characters.');
+      const salt = crypto.randomUUID();
+      credential.salt = salt;
+      credential.passwordHash = await digestPassword(newPassword, salt);
+      saveState(getState());
     },
     signOut: async () => {
       await latency();
@@ -423,6 +623,10 @@ export const localRepositories: SakhiRepositories = {
     listInterests: async () => {
       await latency();
       return getState().interests.filter((item) => item.user_id === activeUserId() && !item.deleted_at);
+    },
+    listInterestOptions: async () => {
+      await latency();
+      return ['Study groups', 'Creative projects', 'Wellbeing', 'Technology', 'Sports', 'Arts and culture', 'Career growth', 'Community'];
     },
   },
   wellness: {
@@ -527,7 +731,12 @@ export const localRepositories: SakhiRepositories = {
       const state = getState();
       const row = state.plannerItems.find((item) => item.id === id && item.user_id === activeUserId());
       if (!row) throw new Error('Planner item not found.');
+      const previousDate = row.date_key ?? today();
       Object.assign(row, changes, { updated_at: now() });
+      if (changes.completed || (changes.date_key && changes.date_key !== previousDate)) {
+        const key = dailyPriorityKey(activeUserId(), previousDate);
+        state.dailyTopThree[key] = (state.dailyTopThree[key] ?? []).filter((itemId) => itemId !== id);
+      }
       saveState(state);
       return row;
     },
@@ -535,10 +744,28 @@ export const localRepositories: SakhiRepositories = {
       await latency();
       const state = getState();
       const row = state.plannerItems.find((item) => item.id === id && item.user_id === activeUserId());
-      if (row) row.deleted_at = now();
+      if (row) {
+        row.deleted_at = now();
+        const key = dailyPriorityKey(activeUserId(), row.date_key ?? today());
+        state.dailyTopThree[key] = (state.dailyTopThree[key] ?? []).filter((itemId) => itemId !== id);
+      }
+      saveState(state);
+    },
+    getDailyTopThree: async (date) => {
+      await latency();
+      return getState().dailyTopThree[dailyPriorityKey(activeUserId(), date)] ?? [];
+    },
+    setDailyTopThree: async (date, ids) => {
+      await latency();
+      if (ids.length > 3 || new Set(ids).size !== ids.length) throw new Error('Choose up to three different priorities.');
+      const state = getState();
+      const validIds = new Set(state.plannerItems.filter((item) => item.user_id === activeUserId() && item.date_key === date && !item.deleted_at && !item.completed).map((item) => item.id));
+      if (ids.some((id) => !validIds.has(id))) throw new Error('A priority must be an incomplete plan item for that day.');
+      state.dailyTopThree[dailyPriorityKey(activeUserId(), date)] = ids;
       saveState(state);
     },
   },
+  placementPrep: localPlacementPrep,
   chat: {
     list: async () => {
       await latency();
@@ -605,6 +832,10 @@ export const localRepositories: SakhiRepositories = {
   campus: {
     listAnnouncements: async () => { await latency(); return getState().announcements.filter((item) => !item.deleted_at); },
     listClubs: async () => { await latency(); return getState().clubs.filter((item) => !item.deleted_at); },
+    listClubMemberships: async () => {
+      await latency();
+      return getState().clubMembers.filter((item) => item.user_id === activeUserId() && !item.deleted_at);
+    },
     joinClub: async (clubId) => {
       await latency();
       const state = getState();
@@ -626,11 +857,28 @@ export const localRepositories: SakhiRepositories = {
       saveState(state);
     },
     listEvents: async () => { await latency(); return getState().events.filter((item) => !item.deleted_at); },
+    listEventRegistrations: async () => {
+      await latency();
+      return getState().eventRegistrations.filter((item) => item.user_id === activeUserId() && !item.deleted_at);
+    },
+    listSavedEvents: async () => {
+      await latency();
+      return getState().savedEvents.filter((item) => item.user_id === activeUserId()).map((item) => item.event_id);
+    },
+    saveEvent: async (eventId, saved) => {
+      await latency();
+      const state = getState();
+      state.savedEvents = state.savedEvents.filter((item) => !(item.user_id === activeUserId() && item.event_id === eventId));
+      if (saved) state.savedEvents.push({ user_id: activeUserId(), event_id: eventId });
+      saveState(state);
+    },
     registerEvent: async (eventId) => {
       await latency();
       const state = getState();
       const event = state.events.find((item) => item.id === eventId);
       if (!event) throw new Error('Event not found.');
+      const existing = state.eventRegistrations.find((item) => item.event_id === eventId && item.user_id === activeUserId());
+      if (existing && existing.status !== 'cancelled' && !existing.deleted_at) return existing;
       const activeCount = state.eventRegistrations.filter((item) => item.event_id === eventId && item.status === 'registered').length;
       const status = event.capacity !== null && activeCount >= event.capacity ? 'waitlisted' : 'registered';
       const registration: EventRegistrationRow = {
@@ -646,6 +894,10 @@ export const localRepositories: SakhiRepositories = {
       return registration;
     },
     listPlacements: async () => { await latency(); return getState().placements.filter((item) => !item.deleted_at); },
+    listPlacementRegistrations: async () => {
+      await latency();
+      return getState().placementRegistrations.filter((item) => item.user_id === activeUserId() && !item.deleted_at);
+    },
     registerPlacement: async (placementId) => {
       await latency();
       const state = getState();
@@ -661,7 +913,8 @@ export const localRepositories: SakhiRepositories = {
     createPost: async (post) => {
       await latency();
       const state = getState();
-      const row: PostRow = { id: makeId('post'), author_id: activeUserId(), campus_id: null, ...post, trust_label: 'community', moderation_status: 'active', ...stamp() };
+      const { anonymous, ...content } = post;
+      const row: PostRow = { id: makeId('post'), author_id: anonymous ? null : activeUserId(), campus_id: null, ...content, trust_label: 'community', moderation_status: 'active', ...stamp() };
       state.posts.unshift(row);
       saveState(state);
       return row;
@@ -674,6 +927,10 @@ export const localRepositories: SakhiRepositories = {
       state.comments.push(row);
       saveState(state);
       return row;
+    },
+    listReactions: async () => {
+      await latency();
+      return getState().reactions.filter((row) => row.user_id === activeUserId() && !row.deleted_at);
     },
     toggleReaction: async (target, type) => {
       await latency();
@@ -691,6 +948,32 @@ export const localRepositories: SakhiRepositories = {
       return row;
     },
     listConnections: async () => { await latency(); return getState().connections.filter((item) => item.requester_id === activeUserId() || item.recipient_id === activeUserId()); },
+    listDiscoverableProfiles: async () => {
+      await latency();
+      if (!getState().consents.discovery_visible) return [];
+      return ['demo-peer-a', 'demo-peer-b'].map((id) => ({
+        id,
+        display_name: 'Demo peer',
+        pronouns: null,
+        bio: 'Synthetic profile for exploring opt-in buddy discovery.',
+        avatar_url: null,
+        campus_name: 'Demo Campus',
+        course: 'Demo course',
+        year: null,
+        city: null,
+        interests: ['Study groups', 'Creative projects'],
+        looking_for: ['Study buddy'],
+        discovery_visible: true,
+        verified: false,
+        created_at: now(),
+        updated_at: now(),
+        deleted_at: null,
+      }));
+    },
+    listBlockedUsers: async () => {
+      await latency();
+      return getState().blocks.filter((row) => row.blocker_id === activeUserId()).map((row) => row.blocked_id);
+    },
     requestConnection: async (recipientId, reason) => {
       await latency();
       const state = getState();
@@ -701,6 +984,14 @@ export const localRepositories: SakhiRepositories = {
       return row;
     },
     listMessages: async () => { await latency(); return getState().messages.filter((item) => item.sender_id === activeUserId() || item.recipient_id === activeUserId()); },
+    markMessagesRead: async () => {
+      await latency();
+      const state = getState();
+      for (const message of state.messages) {
+        if (message.recipient_id === activeUserId() && !message.read_at) message.read_at = now();
+      }
+      saveState(state);
+    },
     sendMessage: async (recipientId, text) => {
       await latency();
       const state = getState();
@@ -736,6 +1027,25 @@ export const localRepositories: SakhiRepositories = {
       if (item) item.read_at = now();
       saveState(state);
     },
+    markAllRead: async () => {
+      await latency();
+      const state = getState();
+      for (const notification of state.notifications) {
+        if (notification.user_id === activeUserId() && !notification.read_at) notification.read_at = now();
+      }
+      saveState(state);
+    },
+    getPreferences: async () => {
+      await latency();
+      return getState().notificationPreferences;
+    },
+    updatePreferences: async (changes) => {
+      await latency();
+      const state = getState();
+      state.notificationPreferences = { ...state.notificationPreferences, ...changes };
+      saveState(state);
+      return state.notificationPreferences;
+    },
   },
   consents: {
     get: async () => { await latency(); return getState().consents; },
@@ -746,6 +1056,8 @@ export const localRepositories: SakhiRepositories = {
       state.consents = { ...state.consents, ...changes, updated_at: now() };
       if (previous.cycle_tracking_opt_in && changes.cycle_tracking_opt_in === false) state.cycleEntries = [];
       if (previous.ai_memory_opt_in && changes.ai_memory_opt_in === false) state.memories = [];
+      if (changes.cycle_tracking_opt_in !== undefined) state.consents.cycle_tracking_consent_at = changes.cycle_tracking_opt_in ? now() : null;
+      if (changes.ai_memory_opt_in !== undefined) state.consents.ai_memory_consent_at = changes.ai_memory_opt_in ? now() : null;
       if (changes.discovery_visible !== undefined && state.profile) state.profile.discovery_visible = changes.discovery_visible;
       saveState(state);
       return state.consents;
@@ -760,36 +1072,48 @@ export const localRepositories: SakhiRepositories = {
         exported_at: now(),
         profile: state.profile?.id === userId ? state.profile : null,
         consents: state.consents,
+        interests: state.interests.filter((item) => item.user_id === userId),
         wellness_logs: state.wellnessLogs.filter((item) => item.user_id === userId),
         cycle_entries: state.cycleEntries.filter((item) => item.user_id === userId),
         sakhi_memories: state.memories.filter((item) => item.user_id === userId),
         sakhi_conversations: state.conversations.filter((item) => item.user_id === userId),
         planner_items: state.plannerItems.filter((item) => item.user_id === userId),
+        daily_top_three: Object.fromEntries(Object.entries(state.dailyTopThree).filter(([key]) => key.startsWith(`${userId}:`))),
+        dsa_progress: state.dsaProgress.filter((item) => item.user_id === userId),
+        aptitude_progress: state.aptitudeProgress.filter((item) => item.user_id === userId),
+        resume_data: state.resumeData?.user_id === userId ? state.resumeData : null,
+        mock_interviews: state.mockInterviews.filter((item) => item.user_id === userId),
+        club_memberships: state.clubMembers.filter((item) => item.user_id === userId),
+        event_registrations: state.eventRegistrations.filter((item) => item.user_id === userId),
+        saved_events: state.savedEvents.filter((item) => item.user_id === userId),
+        placement_registrations: state.placementRegistrations.filter((item) => item.user_id === userId),
+        posts: state.posts.filter((item) => item.author_id === userId),
+        comments: state.comments.filter((item) => item.author_id === userId),
+        reactions: state.reactions.filter((item) => item.user_id === userId),
+        connections: state.connections.filter((item) => item.requester_id === userId || item.recipient_id === userId),
+        messages: state.messages.filter((item) => item.sender_id === userId || item.recipient_id === userId),
+        reports: state.reports.filter((item) => item.reporter_id === userId),
+        blocks: state.blocks.filter((item) => item.blocker_id === userId),
+        notifications: state.notifications.filter((item) => item.user_id === userId),
+        notification_preferences: state.notificationPreferences,
       };
     },
     deleteAccount: async () => {
       await latency();
-      const state = getState();
-      const userId = activeUserId();
-      state.authUser = null;
-      state.profile = null;
-      state.wellnessLogs = state.wellnessLogs.filter((item) => item.user_id !== userId);
-      state.cycleEntries = state.cycleEntries.filter((item) => item.user_id !== userId);
-      state.memories = state.memories.filter((item) => item.user_id !== userId);
-      state.conversations = state.conversations.filter((item) => item.user_id !== userId);
-      state.plannerItems = state.plannerItems.filter((item) => item.user_id !== userId);
-      state.consents = { ...state.consents, user_id: DEMO_USER_ID, ai_memory_opt_in: false, cycle_tracking_opt_in: false, discovery_visible: false };
-      saveState(state);
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+        window.localStorage.removeItem('sakhi-theme');
+      }
+      memoryState = null;
     },
   },
 };
 
-export function getLocalSimulationMode() {
-  const params = new URLSearchParams(window.location.search);
-  return { offline: !navigator.onLine || params.has('demoOffline'), error: params.has('demoError') };
-}
-
 export function resetLocalAdapterForTests() {
   memoryState = null;
-  if (typeof window !== 'undefined') window.localStorage.removeItem(STORAGE_KEY);
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+  }
 }

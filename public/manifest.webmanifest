@@ -1,0 +1,17 @@
+{
+  "name": "Sakhi — Your campus, your people",
+  "short_name": "Sakhi",
+  "description": "A supportive space for campus life, wellbeing, and growth.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff7fa",
+  "theme_color": "#fff7fa",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

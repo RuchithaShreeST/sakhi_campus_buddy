@@ -51,3 +51,21 @@ button, a, input, textarea, select { font: inherit; }
     transition-duration: 0.01ms !important;
   }
 }
+
+@page { margin: 18mm; }
+
+@media print {
+  body * { visibility: hidden; }
+  .resume-print, .resume-print * { visibility: visible; }
+  .resume-print {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+    color: #17131d;
+    background: white;
+  }
+  .resume-print button { display: none; }
+}

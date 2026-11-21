@@ -11,4 +11,11 @@ export const browserPreferences: PreferencesRepository = {
   setTheme(theme: ThemePreference) {
     window.localStorage.setItem(THEME_KEY, theme);
   },
+  getRuntimeStatus() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+      offline: !navigator.onLine || params.has('demoOffline'),
+      simulatedError: params.has('demoError'),
+    };
+  },
 };

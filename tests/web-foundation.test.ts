@@ -93,3 +93,105 @@ test('appearance preference persists locally and respects the system theme by de
   localRepositories.preferences.setTheme('dark');
   assert.equal(localRepositories.preferences.getTheme(), 'dark');
 });
+
+test('local auth verifies email, preserves the user id, and updates the password', async () => {
+  const email = 'student@example.test';
+  const password = 'safe-demo-password';
+  const signup = await localRepositories.auth.signUp(email, password);
+
+  assert.equal(signup.verificationRequired, true);
+  assert.match(signup.demoVerificationCode ?? '', /^[a-f\d]{8}$/i);
+  await assert.rejects(localRepositories.auth.signIn(email, password), /verify your email/);
+
+  const verified = await localRepositories.auth.verifyEmail(signup.demoVerificationCode!);
+  assert.equal(verified.emailVerified, true);
+  await localRepositories.profile.save({
+    display_name: 'Demo Student',
+    campus_name: 'Demo Campus',
+    course: 'Demo studies',
+    year: '2',
+  });
+  await localRepositories.auth.signOut();
+  await assert.equal((await localRepositories.auth.signIn(email, password)).id, verified.id);
+
+  await localRepositories.auth.resetPassword(email, 'new-demo-password');
+  await localRepositories.auth.signOut();
+  await assert.rejects(localRepositories.auth.signIn(email, password), /incorrect/);
+  assert.equal((await localRepositories.auth.signIn(email, 'new-demo-password')).id, verified.id);
+});
+
+test('local wellness summary excludes empty seed logs and bounds the score', async () => {
+  assert.equal((await localRepositories.wellness.getSummary(7)).score, null);
+  await localRepositories.wellness.saveLog({
+    logged_on: new Date().toISOString().slice(0, 10),
+    mood: 'low',
+    sleep_hours: 18,
+    water_ml: 9000,
+    exercise_minutes: 180,
+  });
+  const summary = await localRepositories.wellness.getSummary(7);
+  assert.ok(summary.score !== null && summary.score >= 0 && summary.score <= 100);
+
+  await localRepositories.wellness.saveLog({
+    logged_on: new Date().toISOString().slice(0, 10),
+    sleep_hours: -8,
+    water_ml: -100,
+    exercise_minutes: -10,
+  });
+  const invalidValuesSummary = await localRepositories.wellness.getSummary(7);
+  assert.ok(invalidValuesSummary.score !== null && invalidValuesSummary.score >= 0);
+  assert.ok(Object.values(invalidValuesSummary.breakdown).every((value) => value >= 0));
+});
+
+test('daily top-three priorities allow up to three valid items per date', async () => {
+  const date = new Date().toISOString().slice(0, 10);
+  const items = await Promise.all(['One', 'Two', 'Three'].map((title) =>
+    localRepositories.planner.create({ title, category: 'Study', date_key: date })
+  ));
+  const ids = items.map((item) => item.id);
+
+  await localRepositories.planner.setDailyTopThree(date, ids);
+  assert.deepEqual(await localRepositories.planner.getDailyTopThree(date), ids);
+  await assert.rejects(localRepositories.planner.setDailyTopThree(date, [...ids, 'fourth']), /three/);
+});
+
+test('legacy local state migrates and malformed storage errors remain visible', async () => {
+  storage.set('sakhi.web.local.v1', JSON.stringify({ profile: null }));
+  await localRepositories.auth.currentUser();
+  assert.equal(storage.has('sakhi.web.local.v1'), false);
+  assert.equal(storage.has('sakhi.web.local.v2'), true);
+
+  resetLocalAdapterForTests();
+  storage.set('sakhi.web.local.v2', '{');
+  await assert.rejects(localRepositories.auth.currentUser(), /could not be read/);
+
+  resetLocalAdapterForTests();
+  storage.set('sakhi.web.local.v2', JSON.stringify({ wellnessLogs: 'invalid' }));
+  await assert.rejects(localRepositories.auth.currentUser(), /invalid wellnessLogs/);
+});
+
+test('local account export is scoped to the signed-in user and deletion clears browser data', async () => {
+  const signup = await localRepositories.auth.signUp('owner@example.test', 'safe-demo-password');
+  const user = await localRepositories.auth.verifyEmail(signup.demoVerificationCode!);
+  await localRepositories.profile.save({
+    display_name: 'Demo Owner',
+    campus_name: 'Demo Campus',
+    course: 'Demo studies',
+    year: '2',
+  });
+  const ownLog = await localRepositories.wellness.saveLog({
+    logged_on: new Date().toISOString().slice(0, 10),
+    mood: 'okay',
+  });
+
+  const exported = await localRepositories.account.exportData();
+  assert.equal(exported.profile?.id, user.id);
+  assert.ok(exported.wellness_logs.some((log) => log.id === ownLog.id));
+  assert.ok(exported.wellness_logs.every((log) => log.user_id === user.id));
+
+  localRepositories.preferences.setTheme('dark');
+  await localRepositories.account.deleteAccount();
+  assert.equal(storage.has('sakhi.web.local.v2'), false);
+  assert.equal(localRepositories.preferences.getTheme(), 'light');
+  assert.equal(await localRepositories.auth.currentUser(), null);
+});

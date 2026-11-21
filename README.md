@@ -2,19 +2,21 @@
 
 > **"Your campus. Your wellbeing. Your growth. Your people."**
 
-Sakhi is a comprehensive, production-grade women-first campus life ecosystem designed to empower college students across wellbeing, academics, career placements, clubs, events, and community connection.
+Sakhi is a women-first campus buddy prototype. The web frontend is currently a
+local-first demo; it is not production-ready until its Supabase adapter, project
+configuration, and live service integrations are completed and verified.
 
 ---
 
 ## 🌟 Core Features
 
-- **Sakhi AI Companion**: Dynamic, context-aware companion (`SakhiGirl`) providing study guidance, period care, emotional support, and campus routing.
-- **Home (Sakhi Today)**: Real-time personalized dashboard showing your daily schedule, upcoming placement deadlines, club events, and wellness state.
-- **Circle (Community & Q&A)**: 1-to-1 real-time messaging, study group discovery ("Find My People"), community Q&A ("Ask the Girls"), and topic channels.
-- **Campus Hub**: Multi-campus architecture supporting official announcements, club directories, campus events, and department resources.
-- **Placement Ecosystem**: Placement prep dashboard, interview experiences, aptitude prep, resume tools, and company prep groups with Placement Cell verification badges.
-- **Wellbeing Suite**: Local-first privacy-respecting tracking for mood, sleep, hydration, movement, activity sessions, and optional period/body care tracking.
-- **Role-Based Security**: Scoped RBAC for `STUDENT`, `CAMPUS_ADMIN`, `CLUB_LEAD`, `PLACEMENT_CELL`, `COMMUNITY_LEAD`, and `MODERATOR`.
+- **Sakhi chat**: Scripted local demo replies, cancellation, and a crisis-support path. It is not connected to an AI provider.
+- **Home and planner**: Local check-ins, personal plans, generated sample deadlines, and supportive wellbeing snapshots.
+- **Circle**: Demo posts, comments, reactions, reports, opt-in buddy discovery, and local direct messages.
+- **Campus**: Clearly labelled demo announcements, clubs, events, and placement listings; no real campus or employer facts are seeded.
+- **Growth**: Local DSA/aptitude tracking, resume editing/print-to-PDF, and mock-interview practice.
+- **Privacy controls**: Opt-in cycle tracking, AI memory, and discoverability; consent withdrawal removes local records.
+- **Trust labels**: Shared content is labelled Official, Verified, Community, or AI-assisted.
 
 ---
 
@@ -24,7 +26,7 @@ Sakhi is a comprehensive, production-grade women-first campus life ecosystem des
 - **Styling & UI**: Custom design system (`src/components/sakhi-ui.tsx`), high-contrast dark mode support, fluid responsive design.
 - **State & Storage**: Native app uses AsyncStorage and existing hooks. The web app uses TanStack Query and domain repositories under `src/data/`, with a browser-local demo adapter.
 - **Backend & Database**: Supabase (Postgres, Row Level Security, Auth, Realtime, Storage), Node.js server endpoints for AI proxying.
-- **Testing**: Node test runner, TypeScript strict checking, and ESLint.
+- **Testing**: Node unit tests, Vitest component tests, Playwright end-to-end test, TypeScript strict checking, and ESLint.
 
 ---
 
@@ -66,6 +68,11 @@ Sakhi is a comprehensive, production-grade women-first campus life ecosystem des
    npm run lint
    npm run build
    ```
+6. To run the browser flow, install the Playwright browser once and run:
+   ```bash
+   npx playwright install chromium
+   npm run test:e2e
+   ```
 
 ---
 
@@ -77,8 +84,8 @@ Sakhi is a comprehensive, production-grade women-first campus life ecosystem des
 | `EXPO_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase publishable anonymous key |
 | `VITE_DATA_MODE` | Web data adapter (`local` by default; `supabase` is not implemented yet) |
-| `VITE_SUPABASE_URL` | Public Supabase project URL for the future web adapter |
-| `VITE_SUPABASE_ANON_KEY` | Public Supabase anonymous key for the future web adapter |
+| `VITE_SUPABASE_URL` | Reserved for the future web adapter; currently unused |
+| `VITE_SUPABASE_ANON_KEY` | Reserved for the future web adapter; currently unused |
 | `AI_PROVIDER` | AI service provider (e.g. Gemini, OpenAI) |
 | `AI_API_KEY` | Server-side private API key for AI provider |
 
@@ -86,30 +93,23 @@ Sakhi is a comprehensive, production-grade women-first campus life ecosystem des
 
 ## 🛡️ Security & Role Model
 
-- **Database RLS**: Production migration file available at [`server/supabase/schema.sql`](file:///C:/cherry/MIRA_AI-Assistance/Mira/server/supabase/schema.sql).
-- **Strict Privacy**: Private wellness entries, memories, and 1-to-1 conversations are strictly isolated to the resource owner. Admin roles do NOT have access to private user data.
-- **Content Verification**: Badges (`OFFICIAL`, `VERIFIED`, `COMMUNITY`, `AI-ASSISTED`) guarantee source authenticity.
+- **Database RLS**: Versioned migrations live in [`supabase/migrations/`](supabase/migrations/); validate them against a configured Supabase project before launch.
+- **Strict Privacy**: Backend migrations define owner-only policies for sensitive data. The local browser demo is not encrypted and must not be used for real sensitive data.
+- **Content Trust**: Trust badges report the row's label; they do not independently verify sources.
+- **Frontend integration gaps**: See [`docs/FRONTEND_STATUS.md`](docs/FRONTEND_STATUS.md) before selecting Supabase mode or using real data.
 
 ---
 
 ## 📁 Repository Structure
 
 ```
-C:\cherry\MIRA_AI-Assistance\Mira
-├── src/
-│   ├── web/                # Vite web app shell, routes, theme, and shared UI
-│   ├── data/               # Web domain contracts and local/Supabase adapters
-│   ├── app/                # Expo Router pages (index, campus, circle, wellness, chat, etc.)
-│   ├── components/         # UI components & SakhiGirl companion animations
-│   ├── hooks/              # Reactive hooks (useWellness, useCampus, useSakhiChat)
-│   ├── services/           # Data services (AI, storage, activity engine, notifications)
-│   ├── constants/          # Theme tokens (SakhiColors, spacing, fonts)
-│   ├── data/               # Seed & catalog data
-│   ├── types/              # TypeScript definitions
-│   └── utils/              # Date formatting & helper functions
-├── server/
-│   ├── ai/                 # Sakhi system prompt & response parsers
-│   ├── routes/             # API route handlers
-│   └── supabase/           # SQL schema & RLS migration rules
-└── tests/                  # Unit tests (node --test)
+src/
+├── web/                    # Vite routes, screens, shell, theme, and shared UI
+├── data/                   # Typed domain repositories and local/Supabase adapters
+└── types/                  # Generated Supabase database types
+supabase/
+├── migrations/             # Database source of truth
+└── functions/              # Authenticated Edge Functions
+server/                     # Retained legacy/reference server and schema
+tests/                      # Backend, local adapter, component, and browser tests
 ```
