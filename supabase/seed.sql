@@ -1,1 +1,1 @@
-\i 'migrations/202611210004_phase1_seed.sql'
+-- Demo seed data is applied by migration 202611210004_phase1_seed.sql.

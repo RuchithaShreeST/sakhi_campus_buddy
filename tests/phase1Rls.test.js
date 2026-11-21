@@ -7,6 +7,7 @@ const migrationsDir = path.resolve('supabase/migrations');
 const core = fs.readFileSync(path.join(migrationsDir, '202611210002_phase1_core_schema.sql'), 'utf8');
 const rls = fs.readFileSync(path.join(migrationsDir, '202611210003_phase1_rls.sql'), 'utf8');
 const seed = fs.readFileSync(path.join(migrationsDir, '202611210004_phase1_seed.sql'), 'utf8');
+const seedEntry = fs.readFileSync(path.resolve('supabase/seed.sql'), 'utf8');
 const integration = fs.readFileSync(path.resolve('supabase/tests/phase1_rls.sql'), 'utf8');
 
 test('Phase 1 creates every requested domain table', () => {
@@ -98,6 +99,11 @@ test('Demo seed is labelled and uses relative dates', () => {
   assert.match(seed, /now\(\) \+ interval '7 days'/);
   assert.match(seed, /now\(\) \+ interval '21 days'/);
   assert.doesNotMatch(seed, /Google|Microsoft|Adobe/i);
+});
+
+test('Supabase seed entry contains SQL rather than psql include commands', () => {
+  assert.match(seedEntry, /seed data is applied by migration 202611210004_phase1_seed\.sql/i);
+  assert.doesNotMatch(seedEntry, /^\s*\\/m);
 });
 
 test('Content trust enum contains only supported labels', () => {
