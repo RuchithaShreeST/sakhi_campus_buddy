@@ -14,6 +14,10 @@ const clubMembershipRlsFix = fs.readFileSync(
   path.resolve('supabase/migrations/202611220002_fix_club_membership_rls_recursion.sql'),
   'utf8',
 );
+const moderatorPolicyFix = fs.readFileSync(
+  path.resolve('supabase/migrations/202611220003_scope_moderator_policies.sql'),
+  'utf8',
+);
 
 test('Phase 1 creates every requested domain table', () => {
   const tables = [
@@ -93,7 +97,7 @@ test('Database RLS integration test exercises sensitive data, DMs, blocks, and c
 });
 
 test('Database private-data test covers cross-user writes, RPCs, views, and anon access', () => {
-  assert.match(privateAccessIntegration, /select plan\(34\)/);
+  assert.match(privateAccessIntegration, /select plan\(36\)/);
   for (const assertion of [
     'user A cannot select user B wellness',
     'user A cannot select user B cycle entries',
@@ -114,6 +118,7 @@ test('Database private-data test covers cross-user writes, RPCs, views, and anon
     'admin cannot read another user wellness',
     'moderator cannot read another user memories',
     'anon cannot read rows from private tables, including opted-in profiles',
+    'moderator-only policies do not run for anon',
     'anon cannot execute any security-definer function',
   ]) {
     assert.ok(privateAccessIntegration.includes(assertion), `missing database assertion: ${assertion}`);
@@ -126,6 +131,12 @@ test('Club roster RLS avoids recursive policy evaluation', () => {
   assert.match(clubMembershipRlsFix, /revoke all on function private\.is_club_member\(uuid\) from public, anon, authenticated/i);
   assert.match(clubMembershipRlsFix, /grant execute on function private\.is_club_member\(uuid\) to authenticated/i);
   assert.match(clubMembershipRlsFix, /for select\s+to authenticated\s+using/i);
+});
+
+test('Moderator-only policies are not applied to anon requests', () => {
+  for (const table of ['reports', 'audit_log', 'posts', 'comments', 'clubs', 'events', 'placements', 'announcements']) {
+    assert.match(moderatorPolicyFix, new RegExp(`alter policy \"[^\"]+\" on public\\.${table} to authenticated`, 'i'));
+  }
 });
 
 test('Signup auto-creates a profile, consent row and student role', () => {
