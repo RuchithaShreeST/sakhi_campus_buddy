@@ -76,6 +76,8 @@ test('Today-for-you RPC includes next item, wellness, growth and announcement', 
   assert.match(migration, /wellness_nudge/);
   assert.match(migration, /growth_nudge/);
   assert.match(migration, /top_announcement/);
+  const streakFix = fs.readFileSync(path.resolve('supabase/migrations/202611220001_fix_sakhi_today_streak_date_cast.sql'), 'utf8');
+  assert.match(streakFix, /current_date - \(rn - 1\)::integer/);
 });
 
 test('AI provider abstraction retries and supports a fallback provider', () => {
