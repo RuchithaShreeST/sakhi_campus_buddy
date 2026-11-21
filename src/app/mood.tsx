@@ -1,0 +1,23 @@
+import { useState } from 'react';
+import { Text, TextInput, View, StyleSheet } from 'react-native';
+
+import { ActionButton, Card, Header, MiniChart, Screen, SectionTitle } from '@/components/sakhi-ui';
+import { Companion } from '@/components/companion/Companion';
+import { MiraColors } from '@/constants/theme';
+import { useWellness } from '@/hooks/use-wellness';
+import { Mood } from '@/types/wellness';
+
+const moods: { id: Mood; emoji: string; label: string }[] = [{ id: 'happy', emoji: '😊', label: 'Happy' }, { id: 'calm', emoji: '😌', label: 'Calm' }, { id: 'good', emoji: '🙂', label: 'Good' }, { id: 'okay', emoji: '😐', label: 'Okay' }, { id: 'low', emoji: '😔', label: 'Low' }, { id: 'stressed', emoji: '😫', label: 'Stressed' }, { id: 'tired', emoji: '😴', label: 'Tired' }];
+export default function MoodScreen() {
+  const { data, wellness, logMood } = useWellness();
+  const [selected, setSelected] = useState<Mood>(data.mood.mood);
+  const [note, setNote] = useState(data.mood.note);
+  const save = () => logMood(selected, note);
+  const companionMood = selected === 'happy' || selected === 'good' ? 'happy' : selected === 'calm' ? 'calm' : selected === 'tired' ? 'tired' : selected === 'low' || selected === 'stressed' ? 'concerned' : wellness.state;
+  return <Screen><Header eyebrow="Check in with yourself" title="How are you feeling?" subtitle="There is no right answer. Just a little honesty." />
+    <Card tone="rose"><View style={styles.moodHero}><View><Text style={styles.heroTitle}>MIRA is listening</Text><Text style={styles.heroCopy}>Your check-in helps shape a gentler day.</Text></View><Companion state={companionMood} /></View></Card>
+    <Card><Text style={styles.cardTitle}>Choose a feeling</Text><View style={styles.moodGrid}>{moods.map((mood) => <Text key={mood.id} onPress={() => setSelected(mood.id)} style={[styles.moodChoice, selected === mood.id && styles.selectedMood]}><Text style={styles.emoji}>{mood.emoji}</Text>{'\n'}{mood.label}</Text>)}</View><Text style={styles.fieldLabel}>Anything on your mind? <Text style={styles.optional}>Optional</Text></Text><TextInput value={note} onChangeText={setNote} placeholder="A few words for future you" placeholderTextColor={MiraColors.muted} multiline style={[styles.input, styles.noteInput]} /><ActionButton label="Save check-in" icon="♡" onPress={save} /></Card>
+    <SectionTitle title="Your mood week" /><Card><MiniChart values={data.moodHistory.slice(0, 7).reverse().map((entry) => ({ happy: 5, energetic: 5, good: 4, calm: 4, okay: 3, low: 2, stressed: 1, tired: 1 }[entry.mood]))} color={MiraColors.coral} /></Card>
+    <SectionTitle title="Recent check-ins" />{data.moodHistory.slice(0, 5).map((entry) => { const mood = moods.find((item) => item.id === entry.mood); return <View style={styles.history} key={entry.id}><Text style={styles.historyEmoji}>{mood?.emoji}</Text><View style={styles.historyCopy}><Text style={styles.historyTitle}>{mood?.label}</Text><Text style={styles.historyNote}>{entry.note || 'No note added'}</Text></View><Text style={styles.historyDate}>{entry.date}</Text></View>; })}</Screen>;
+}
+const styles = StyleSheet.create({ moodHero: { flexDirection: 'row', alignItems: 'center', minHeight: 170 }, heroTitle: { color: MiraColors.ink, fontSize: 19, fontWeight: '900', flex: 1 }, heroCopy: { color: MiraColors.muted, fontSize: 13, lineHeight: 19, marginTop: 7, maxWidth: 160 }, cardTitle: { color: MiraColors.ink, fontSize: 16, fontWeight: '800' }, moodGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginTop: 16 }, moodChoice: { backgroundColor: '#FFF9F7', borderWidth: 1, borderColor: MiraColors.line, borderRadius: 16, width: '22%', minHeight: 68, textAlign: 'center', paddingTop: 9, color: MiraColors.muted, fontSize: 11, overflow: 'hidden' }, selectedMood: { backgroundColor: MiraColors.blush, borderColor: MiraColors.coral, color: MiraColors.rose, fontWeight: '800' }, emoji: { fontSize: 22 }, fieldLabel: { color: MiraColors.muted, fontSize: 12, fontWeight: '700', marginTop: 18, marginBottom: 7 }, optional: { fontWeight: '400' }, input: { backgroundColor: '#FFF9F7', borderWidth: 1, borderColor: MiraColors.line, borderRadius: 13, paddingHorizontal: 12, paddingVertical: 10, color: MiraColors.ink, fontSize: 14 }, noteInput: { minHeight: 68, textAlignVertical: 'top', marginBottom: 16 }, history: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: MiraColors.line }, historyEmoji: { fontSize: 24, width: 40 }, historyCopy: { flex: 1 }, historyTitle: { color: MiraColors.ink, fontSize: 14, fontWeight: '800' }, historyNote: { color: MiraColors.muted, fontSize: 12, marginTop: 2 }, historyDate: { color: MiraColors.muted, fontSize: 11 } });
