@@ -47,7 +47,7 @@ export function App() {
               <Routes>
                 <Route path="/auth" element={<PublicOnly><AuthPage /></PublicOnly>} />
                 <Route path="/verify-email" element={<PublicOnly><VerifyEmailPage /></PublicOnly>} />
-                <Route path="/reset-password" element={<PublicOnly><ResetPasswordPage /></PublicOnly>} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route element={<RequireSession />}>
                   <Route path="/onboarding" element={<OnboardingPage />} />
                 </Route>

@@ -36,7 +36,7 @@ export function AuthPage() {
 
   return (
     <AuthLayout>
-      <PageHeading eyebrow="Welcome to Sakhi" title={mode === 'sign-in' ? 'Sign in' : 'Create your account'} description="Your demo account and profile stay in this browser in local mode." />
+      <PageHeading eyebrow="Welcome to Sakhi" title={mode === 'sign-in' ? 'Sign in' : 'Create your account'} description="A supportive space for your campus life, wherever you are." />
       <Card>
         <form className="space-y-4" onSubmit={submit}>
           <div>
@@ -103,11 +103,14 @@ export function VerifyEmailPage() {
 export function ResetPasswordPage() {
   const { resetPassword } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [localResetReady, setLocalResetReady] = useState(false);
+  const isRecovery = new URLSearchParams(location.search).get('mode') === 'update' || localResetReady;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -115,8 +118,15 @@ export function ResetPasswordPage() {
     setError(null);
     setMessage(null);
     try {
-      await resetPassword(email, password);
-      setMessage('Password updated for this local demo account.');
+      const result = await resetPassword(email, isRecovery ? password : undefined);
+      if (result.status === 'email_sent') {
+        setMessage('If that address is registered, a reset link is on its way. Open it to choose a new password.');
+      } else if (result.status === 'ready_to_update') {
+        setLocalResetReady(true);
+        setMessage('Local demo account found. Choose a new password below.');
+      } else {
+        setMessage('Your password has been updated. You can now sign in with it.');
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'We could not reset that password.');
     } finally {
@@ -126,14 +136,14 @@ export function ResetPasswordPage() {
 
   return (
     <AuthLayout>
-      <PageHeading eyebrow="Account access" title="Reset password" description="Choose a new password for your local demo account." />
+      <PageHeading eyebrow="Account access" title="Reset password" description="Request a secure reset link, then choose a new password. Local demo mode uses the same steps without sending email." />
       <Card>
         <form className="space-y-4" onSubmit={submit}>
-          <div><FieldLabel htmlFor="reset-email">Email</FieldLabel><TextInput id="reset-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></div>
-          <div><FieldLabel htmlFor="reset-new-password">New password</FieldLabel><TextInput id="reset-new-password" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} /></div>
+          {!isRecovery && <div><FieldLabel htmlFor="reset-email">Email</FieldLabel><TextInput id="reset-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></div>}
+          {isRecovery && <div><FieldLabel htmlFor="reset-new-password">New password</FieldLabel><TextInput id="reset-new-password" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} /></div>}
           {error && <InlineMessage>{error}</InlineMessage>}
           {message && <InlineMessage tone="success">{message}</InlineMessage>}
-          <Button className="w-full" disabled={busy}>{busy ? 'Updating…' : 'Update password'}</Button>
+          <Button className="w-full" disabled={busy}>{busy ? 'Please wait…' : isRecovery ? 'Update password' : 'Send reset link'}</Button>
         </form>
         <button type="button" className="mt-3 min-h-11 font-semibold text-sakhi-rose" onClick={() => navigate('/auth')}>Back to sign in</button>
       </Card>

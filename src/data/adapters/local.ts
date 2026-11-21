@@ -568,11 +568,13 @@ export const localRepositories: SakhiRepositories = {
       if (!credential) {
         throw new Error('No local demo account exists for that email.');
       }
+      if (newPassword === undefined) return { status: 'ready_to_update' };
       if (newPassword.length < 8) throw new Error('Use a password with at least 8 characters.');
       const salt = crypto.randomUUID();
       credential.salt = salt;
       credential.passwordHash = await digestPassword(newPassword, salt);
       saveState(getState());
+      return { status: 'updated' };
     },
     signOut: async () => {
       await latency();

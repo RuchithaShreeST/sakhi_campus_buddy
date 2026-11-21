@@ -2,8 +2,8 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { ProfileRow } from '@/types/database';
-import type { AuthUser, SignUpResult } from '@/data/contracts';
-import { repositories } from '@/data/repositories';
+import type { AuthUser, PasswordResetResult, SignUpResult } from '@/data/contracts';
+import { dataMode, repositories } from '@/data/repositories';
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -15,7 +15,7 @@ type AuthContextValue = {
   signIn(email: string, password: string): Promise<void>;
   signUp(email: string, password: string): Promise<SignUpResult>;
   verifyEmail(code: string): Promise<void>;
-  resetPassword(email: string, newPassword: string): Promise<void>;
+  resetPassword(email: string, newPassword?: string): Promise<PasswordResetResult>;
   signOut(): Promise<void>;
   deleteAccount(): Promise<void>;
   saveOnboarding(profile: Partial<ProfileRow>, consent: { ai_memory_opt_in: boolean; cycle_tracking_opt_in: boolean; discovery_visible: boolean }): Promise<void>;
@@ -31,7 +31,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryKey: SESSION_QUERY_KEY,
     queryFn: async () => {
       const user = await repositories.auth.currentUser();
-      return { user, profile: user ? await repositories.profile.get() : null };
+      const profile = user && dataMode === 'local' ? await repositories.profile.get() : null;
+      return { user, profile };
     },
   });
   const user = session.data?.user ?? null;
@@ -53,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     const current = await repositories.auth.signIn(email, password);
-    const updatedProfile = await repositories.profile.get();
+    const updatedProfile = dataMode === 'local' ? await repositories.profile.get() : null;
     queryClient.setQueryData(SESSION_QUERY_KEY, { user: current, profile: updatedProfile });
     setPendingEmail(null);
     setDemoVerificationCode(null);
@@ -61,14 +62,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyEmail = useCallback(async (code: string) => {
     const current = await repositories.auth.verifyEmail(code);
-    const updatedProfile = await repositories.profile.get();
+    const updatedProfile = dataMode === 'local' ? await repositories.profile.get() : null;
     queryClient.setQueryData(SESSION_QUERY_KEY, { user: current, profile: updatedProfile });
     setPendingEmail(null);
     setDemoVerificationCode(null);
   }, [queryClient]);
 
-  const resetPassword = useCallback(async (email: string, newPassword: string) => {
-    await repositories.auth.resetPassword(email, newPassword);
+  const resetPassword = useCallback(async (email: string, newPassword?: string): Promise<PasswordResetResult> => {
+    return repositories.auth.resetPassword(email, newPassword);
   }, []);
 
   const signOut = useCallback(async () => {

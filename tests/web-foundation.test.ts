@@ -84,8 +84,8 @@ test('local adapter surfaces simulated failures rather than hiding them', async 
   await assert.rejects(localRepositories.campus.listAnnouncements(), /Simulated local-adapter failure/);
 });
 
-test('Supabase stub reports that live integration is not configured', async () => {
-  await assert.rejects(supabaseRepositories.auth.currentUser(), /not configured yet/);
+test('Supabase auth reports missing public client configuration', async () => {
+  await assert.rejects(supabaseRepositories.auth.currentUser(), /Supabase Auth is not configured/);
 });
 
 test('appearance preference persists locally and respects the system theme by default', () => {
@@ -114,7 +114,8 @@ test('local auth verifies email, preserves the user id, and updates the password
   await localRepositories.auth.signOut();
   await assert.equal((await localRepositories.auth.signIn(email, password)).id, verified.id);
 
-  await localRepositories.auth.resetPassword(email, 'new-demo-password');
+  const reset = await localRepositories.auth.resetPassword(email, 'new-demo-password');
+  assert.deepEqual(reset, { status: 'updated' });
   await localRepositories.auth.signOut();
   await assert.rejects(localRepositories.auth.signIn(email, password), /incorrect/);
   assert.equal((await localRepositories.auth.signIn(email, 'new-demo-password')).id, verified.id);

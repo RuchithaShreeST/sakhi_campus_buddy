@@ -40,6 +40,7 @@
     "test:unit": "node --test tests/*.test.js",
     "test:components": "vitest run",
     "test:e2e": "playwright test",
+    "test:integration:auth": "node tests/run-supabase-auth-integration.js",
     "test": "npm run typecheck && node --experimental-strip-types --test tests/*.test.js tests/*.test.ts && npm run test:components",
     "lint": "eslint src/web src/data"
   },
