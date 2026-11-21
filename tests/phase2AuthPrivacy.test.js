@@ -7,12 +7,22 @@ const migrationPath = path.resolve('supabase/migrations/202611210005_phase2_auth
 const migration = fs.readFileSync(migrationPath, 'utf8');
 const coreMigrationPath = path.resolve('supabase/migrations/202611210002_phase1_core_schema.sql');
 const coreMigration = fs.readFileSync(coreMigrationPath, 'utf8');
+const consentHardeningPath = path.resolve('supabase/migrations/202611210008_privacy_consent_defaults.sql');
+const consentHardening = fs.readFileSync(consentHardeningPath, 'utf8');
 
 test('Signup trigger remains owner-profile and consent aware', () => {
   assert.match(coreMigration, /create or replace function public\.handle_new_user/);
   assert.match(coreMigration, /insert into public\.profiles/);
   assert.match(coreMigration, /insert into public\.consents/);
   assert.match(coreMigration, /insert into public\.user_roles/);
+});
+
+test('Sensitive consent and discovery default to false for existing and new users', () => {
+  assert.match(consentHardening, /alter column discovery_visible set default false/);
+  assert.match(consentHardening, /update public\.profiles\s+set discovery_visible = false/i);
+  assert.match(consentHardening, /update public\.consents\s+set discovery_visible = false/i);
+  assert.match(consentHardening, /values \(new\.id, coalesce\(new\.raw_user_meta_data->>'display_name', ''\), false\)/);
+  assert.match(consentHardening, /values \(new\.id, false, false, false\)/);
 });
 
 test('Campus verification rejects domains outside campus allowlist', () => {
