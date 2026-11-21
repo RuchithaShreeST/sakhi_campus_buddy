@@ -20,11 +20,11 @@ Sakhi is a comprehensive, production-grade women-first campus life ecosystem des
 
 ## 🏗️ Architecture & Technology Stack
 
-- **Frontend**: React Native, Expo SDK 57, Expo Router (file-based routing), TypeScript.
+- **Frontend**: The native reference app uses React Native, Expo SDK 57, and Expo Router. The new web frontend uses React, Vite, TypeScript, Tailwind, and React Router.
 - **Styling & UI**: Custom design system (`src/components/sakhi-ui.tsx`), high-contrast dark mode support, fluid responsive design.
-- **State & Storage**: Local AsyncStorage fallback, custom reactive hooks (`useWellness`, `useCampus`, `useSakhiChat`), Supabase sync adapters.
+- **State & Storage**: Native app uses AsyncStorage and existing hooks. The web app uses TanStack Query and domain repositories under `src/data/`, with a browser-local demo adapter.
 - **Backend & Database**: Supabase (Postgres, Row Level Security, Auth, Realtime, Storage), Node.js server endpoints for AI proxying.
-- **Testing**: Built-in test runner (`node --test`), TypeScript strict checking (`tsc --noEmit`), Expo Linter (`expo lint`).
+- **Testing**: Node test runner, TypeScript strict checking, and ESLint.
 
 ---
 
@@ -32,7 +32,7 @@ Sakhi is a comprehensive, production-grade women-first campus life ecosystem des
 
 ### Prerequisites
 
-- Node.js v18+ (v24 recommended)
+- Node.js v22.12+
 - npm v10+
 
 ### Installation & Local Development
@@ -42,31 +42,29 @@ Sakhi is a comprehensive, production-grade women-first campus life ecosystem des
    npm install
    ```
 
-2. Copy `.env.example` to `.env` and fill in your keys:
+2. Copy `.env.example` to `.env`:
    ```bash
    cp .env.example .env
    ```
 
-3. Run the development server (Web / Mobile):
+3. Run the web frontend:
    ```bash
-   # Web
    npm run web
+   ```
 
-   # Mobile (iOS / Android / Expo Go)
+   The web app defaults to local demo mode (`VITE_DATA_MODE=local`). The Supabase web adapter is currently a typed stub; do not select `supabase` expecting a live connection yet.
+
+4. The retained native Expo app can still be started with:
+   ```bash
    npm run ios
    npm run android
    ```
 
-4. Run tests & linting:
+5. Run checks and create a production web bundle:
    ```bash
-   # Run type checks and unit tests
    npm test
-
-   # Run ESLint
    npm run lint
-
-   # Build web export bundle
-   npx expo export --platform web
+   npm run build
    ```
 
 ---
@@ -78,6 +76,9 @@ Sakhi is a comprehensive, production-grade women-first campus life ecosystem des
 | `EXPO_PUBLIC_SAKHI_API_URL` | Public API URL for Sakhi backend / AI proxy endpoint |
 | `EXPO_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase publishable anonymous key |
+| `VITE_DATA_MODE` | Web data adapter (`local` by default; `supabase` is not implemented yet) |
+| `VITE_SUPABASE_URL` | Public Supabase project URL for the future web adapter |
+| `VITE_SUPABASE_ANON_KEY` | Public Supabase anonymous key for the future web adapter |
 | `AI_PROVIDER` | AI service provider (e.g. Gemini, OpenAI) |
 | `AI_API_KEY` | Server-side private API key for AI provider |
 
@@ -96,6 +97,8 @@ Sakhi is a comprehensive, production-grade women-first campus life ecosystem des
 ```
 C:\cherry\MIRA_AI-Assistance\Mira
 ├── src/
+│   ├── web/                # Vite web app shell, routes, theme, and shared UI
+│   ├── data/               # Web domain contracts and local/Supabase adapters
 │   ├── app/                # Expo Router pages (index, campus, circle, wellness, chat, etc.)
 │   ├── components/         # UI components & SakhiGirl companion animations
 │   ├── hooks/              # Reactive hooks (useWellness, useCampus, useSakhiChat)

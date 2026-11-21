@@ -1,11 +1,13 @@
 {
   "name": "sakhi",
-  "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
     "@expo/ui": "~57.0.16",
     "@react-native-async-storage/async-storage": "^3.1.1",
     "@supabase/supabase-js": "^2.119.2",
+    "@tanstack/react-query": "^5.108.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "expo": "~57.0.20",
     "expo-constants": "~57.0.17",
     "expo-device": "~57.0.1",
@@ -20,6 +22,7 @@
     "expo-symbols": "~57.0.2",
     "expo-system-ui": "~57.0.3",
     "expo-web-browser": "~57.0.2",
+    "lucide-react": "^1.77.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -28,24 +31,36 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.10.1"
+    "react-native-worklets": "0.10.1",
+    "react-router-dom": "^7.18.6",
+    "tailwind-merge": "^3.7.1"
   },
   "devDependencies": {
+    "@types/node": "^26.6.6",
     "@types/react": "~19.2.2",
+    "@types/react-dom": "~19.2.2",
+    "@vitejs/plugin-react": "^6.3.0",
+    "autoprefixer": "^10.7.0",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~57.0.2",
-    "typescript": "~6.0.3"
+    "postcss": "^8.5.33",
+    "tailwindcss": "^3.4.19",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.8"
   },
   "scripts": {
-    "start": "expo start",
+    "start": "vite --host 0.0.0.0",
+    "build": "tsc -p tsconfig.web.json --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web",
-    "test:types": "tsc --noEmit",
+    "web": "vite --host 0.0.0.0",
+    "typecheck": "tsc -p tsconfig.web.json --noEmit",
+    "test:types": "npm run typecheck",
     "test:unit": "node --test tests/*.test.js",
-    "test": "tsc --noEmit && node --test tests/*.test.js",
-    "lint": "expo lint"
+    "test": "npm run typecheck && node --experimental-strip-types --test tests/*.test.js tests/*.test.ts",
+    "lint": "eslint src/web src/data"
   },
   "private": true
 }

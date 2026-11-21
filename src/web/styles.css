@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --background: 340 67% 99%;
+  --surface: 0 0% 100%;
+  --ink: 265 27% 18%;
+  --muted: 264 11% 43%;
+  --border: 330 27% 90%;
+  --rose: 337 67% 55%;
+  --lavender: 263 68% 88%;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: 264 25% 10%;
+  --surface: 264 22% 14%;
+  --ink: 270 30% 96%;
+  --muted: 264 12% 72%;
+  --border: 264 16% 26%;
+  --rose: 336 75% 69%;
+  --lavender: 264 32% 32%;
+}
+
+* { box-sizing: border-box; }
+
+html { min-width: 320px; background: hsl(var(--background)); scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: hsl(var(--background));
+  color: hsl(var(--ink));
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+button, a, input, textarea, select { font: inherit; }
+
+::selection { background: hsl(var(--lavender)); color: hsl(var(--ink)); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
