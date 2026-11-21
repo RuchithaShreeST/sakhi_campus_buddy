@@ -90,6 +90,7 @@ test('Scheduled nudges and burnout detection are present', () => {
   const jobs = fs.readFileSync(path.resolve('supabase/migrations/202611210007_phase345_jobs.sql'), 'utf8');
   assert.match(jobs, /create extension if not exists pg_cron with schema pg_catalog/i);
   assert.match(jobs, /if exists\s*\([\s\S]*?from cron\.job[\s\S]*?jobname = 'sakhi-daily-nudges'[\s\S]*?\)\s*then\s*perform cron\.unschedule/i);
+  assert.match(jobs, /\bend if;/i);
   assert.match(jobs, /sakhi-daily-nudges/);
   assert.match(jobs, /0 9 \* \* \*/);
 });

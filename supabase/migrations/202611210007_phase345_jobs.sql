@@ -8,7 +8,7 @@ begin
     where jobname = 'sakhi-daily-nudges'
   ) then
     perform cron.unschedule('sakhi-daily-nudges');
-  end;
+  end if;
 
   perform cron.schedule(
     'sakhi-daily-nudges',
