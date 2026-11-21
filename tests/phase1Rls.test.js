@@ -18,6 +18,10 @@ const moderatorPolicyFix = fs.readFileSync(
   path.resolve('supabase/migrations/202611220003_scope_moderator_policies.sql'),
   'utf8',
 );
+const profileDiscoveryFix = fs.readFileSync(
+  path.resolve('supabase/migrations/202611220004_require_auth_for_profile_discovery.sql'),
+  'utf8',
+);
 
 test('Phase 1 creates every requested domain table', () => {
   const tables = [
@@ -137,6 +141,13 @@ test('Moderator-only policies are not applied to anon requests', () => {
   for (const table of ['reports', 'audit_log', 'posts', 'comments', 'clubs', 'events', 'placements', 'announcements']) {
     assert.match(moderatorPolicyFix, new RegExp(`alter policy \"[^\"]+\" on public\\.${table} to authenticated`, 'i'));
   }
+});
+
+test('Profile discovery is limited to authenticated users', () => {
+  assert.match(
+    profileDiscoveryFix,
+    /alter policy "profiles own and discoverable" on public\.profiles to authenticated/i,
+  );
 });
 
 test('Signup auto-creates a profile, consent row and student role', () => {
