@@ -3,7 +3,7 @@ name: Sakhi backend CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, security-hardening]
 
 jobs:
   validate:
@@ -15,6 +15,42 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npx tsc --noEmit
+      - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      - run: npm run build
+
+  supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Start local Supabase
+        shell: bash
+        run: |
+          set +e
+          npx --yes supabase@3.2.0 start > "$RUNNER_TEMP/supabase-start.log" 2>&1
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            grep -viE '(ANON_KEY|SERVICE_ROLE_KEY|JWT_SECRET|SECRET_KEY|PUBLISHABLE_KEY|eyJ[a-zA-Z0-9._-]{20,})' "$RUNNER_TEMP/supabase-start.log" || true
+            exit "$status"
+          fi
+          grep -viE '(ANON_KEY|SERVICE_ROLE_KEY|JWT_SECRET|SECRET_KEY|PUBLISHABLE_KEY|eyJ[a-zA-Z0-9._-]{20,})' "$RUNNER_TEMP/supabase-start.log" || true
+      - run: npx --yes supabase@3.2.0 db reset
+      - run: npx --yes supabase@3.2.0 test db
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
