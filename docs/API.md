@@ -16,6 +16,9 @@ planner and placement progress, Circle posts/comments/reactions, registrations,
 connections, messages, reports, blocks, notifications, audit entries, and push
 subscriptions. Anonymous Circle posts retain a private `user_id` for ownership,
 export, and deletion; the public `author_id` remains null.
+Account deletion removes the Auth user and cascades through user-owned rows; audit
+actors, report moderators, and role grantors are anonymized to preserve unrelated
+moderation history without retaining their profile references.
 
 ## Authentication
 

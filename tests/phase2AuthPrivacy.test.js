@@ -9,6 +9,24 @@ const coreMigrationPath = path.resolve('supabase/migrations/202611210002_phase1_
 const coreMigration = fs.readFileSync(coreMigrationPath, 'utf8');
 const consentHardeningPath = path.resolve('supabase/migrations/202611210008_privacy_consent_defaults.sql');
 const consentHardening = fs.readFileSync(consentHardeningPath, 'utf8');
+const accountDeletionPath = path.resolve('supabase/migrations/202611210011_account_deletion_cascades.sql');
+const accountDeletion = fs.readFileSync(accountDeletionPath, 'utf8');
+
+function getUserIdTables() {
+  const migrationDirectory = path.resolve('supabase/migrations');
+  const migrationFiles = fs.readdirSync(migrationDirectory).filter((file) => file.endsWith('.sql'));
+  const userIdTables = new Set();
+  for (const file of migrationFiles) {
+    const sql = fs.readFileSync(path.join(migrationDirectory, file), 'utf8');
+    for (const match of sql.matchAll(/create table(?: if not exists)?\s+public\.([a-z0-9_]+)\s*\(([\s\S]*?)^\);/gim)) {
+      if (/^\s*user_id\s+/im.test(match[2])) userIdTables.add(match[1]);
+    }
+    for (const match of sql.matchAll(/alter table public\.([a-z0-9_]+)\s+add column(?: if not exists)?\s+user_id\b/gim)) {
+      userIdTables.add(match[1]);
+    }
+  }
+  return userIdTables;
+}
 
 test('Signup trigger remains owner-profile and consent aware', () => {
   assert.match(coreMigration, /create or replace function public\.handle_new_user/);
@@ -42,12 +60,19 @@ test('Withdrawing AI memory consent deletes memories', () => {
 });
 
 test('Account deletion RPC removes private and relational user data', () => {
-  assert.match(migration, /delete from public\.wellness_logs/);
-  assert.match(migration, /delete from public\.cycle_entries/);
-  assert.match(migration, /delete from public\.sakhi_memories/);
-  assert.match(migration, /delete from public\.sakhi_conversations/);
-  assert.match(migration, /delete from public\.direct_messages/);
-  assert.match(migration, /delete from auth\.users/);
+  assert.match(accountDeletion, /delete from auth\.users where id = current_user_id/);
+  assert.match(accountDeletion, /auth\.role\(\) <> 'authenticated'/);
+  assert.match(accountDeletion, /foreign key \(actor_id\) references public\.profiles\(id\) on delete set null/);
+  assert.match(accountDeletion, /foreign key \(moderator_id\) references public\.profiles\(id\) on delete set null/);
+});
+
+test('Database deletion test covers every table with user-owned rows', () => {
+  const deletionTest = fs.readFileSync(path.resolve('supabase/tests/account_deletion.sql'), 'utf8');
+  assert.match(deletionTest, /information_schema\.columns/);
+  assert.match(deletionTest, /user_id::text = \$1/);
+  for (const table of getUserIdTables()) {
+    assert.match(deletionTest, new RegExp(`(?:insert into|update) public\\.${table}\\b`, 'i'), `${table} needs a deletion fixture`);
+  }
 });
 
 test('Delete-account Edge function requires JWT and service role secret', () => {
@@ -65,22 +90,9 @@ test('Export Edge function queries user-owned scope only', () => {
 });
 
 test('Data export covers every SQL table with a user_id column', () => {
-  const migrationDirectory = path.resolve('supabase/migrations');
-  const migrationFiles = fs.readdirSync(migrationDirectory).filter((file) => file.endsWith('.sql'));
-  const userIdTables = new Set();
-  for (const file of migrationFiles) {
-    const sql = fs.readFileSync(path.join(migrationDirectory, file), 'utf8');
-    for (const match of sql.matchAll(/create table(?: if not exists)?\s+public\.([a-z0-9_]+)\s*\(([\s\S]*?)^\);/gim)) {
-      if (/^\s*user_id\s+/im.test(match[2])) userIdTables.add(match[1]);
-    }
-    for (const match of sql.matchAll(/alter table public\.([a-z0-9_]+)\s+add column(?: if not exists)?\s+user_id\b/gim)) {
-      userIdTables.add(match[1]);
-    }
-  }
-
   const scope = fs.readFileSync(path.resolve('supabase/functions/_shared/user-data-export.ts'), 'utf8');
   const exportedTables = new Set([...scope.matchAll(/table:\s*"([a-z0-9_]+)"/g)].map((match) => match[1]));
-  const missingTables = [...userIdTables].filter((table) => !exportedTables.has(table));
+  const missingTables = [...getUserIdTables()].filter((table) => !exportedTables.has(table));
   assert.deepEqual(missingTables, []);
 });
 
