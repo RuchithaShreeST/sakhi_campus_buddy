@@ -67,6 +67,7 @@ test('Direct messages are participant-only and blocked users cannot send', () =>
 
 test('Database RLS integration test exercises sensitive data, DMs, blocks, and consent', () => {
   assert.match(integration, /select plan\(29\)/);
+  assert.equal((integration.match(/select has_table\('public', '[^']+', '[^']+'\);/g) ?? []).length, 8);
   for (const assertion of [
     'owner can read own wellness rows',
     'admin cannot read another user wellness rows',

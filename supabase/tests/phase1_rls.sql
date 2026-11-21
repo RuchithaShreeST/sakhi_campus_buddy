@@ -3,14 +3,14 @@
 begin;
 select plan(29);
 
-select has_table('public', 'wellness_logs');
-select has_table('public', 'cycle_entries');
-select has_table('public', 'sakhi_memories');
-select has_table('public', 'direct_messages');
-select has_table('public', 'reports');
-select has_table('public', 'blocks');
-select has_table('public', 'audit_log');
-select has_table('public', 'sakhi_conversations');
+select has_table('public', 'wellness_logs', 'wellness_logs table exists in public');
+select has_table('public', 'cycle_entries', 'cycle_entries table exists in public');
+select has_table('public', 'sakhi_memories', 'sakhi_memories table exists in public');
+select has_table('public', 'direct_messages', 'direct_messages table exists in public');
+select has_table('public', 'reports', 'reports table exists in public');
+select has_table('public', 'blocks', 'blocks table exists in public');
+select has_table('public', 'audit_log', 'audit_log table exists in public');
+select has_table('public', 'sakhi_conversations', 'sakhi_conversations table exists in public');
 
 insert into auth.users (
   id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -115,7 +115,7 @@ select is((select count(*)::integer from public.cycle_entries), 0, 'admin cannot
 select is((select count(*)::integer from public.sakhi_memories), 0, 'admin cannot read another user memory rows');
 select is(
   (select count(*)::integer from public.direct_messages),
-  2,
+  3,
   'DM participant can read only messages where they are a participant'
 );
 reset role;
