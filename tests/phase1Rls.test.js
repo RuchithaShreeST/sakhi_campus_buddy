@@ -10,6 +10,10 @@ const seed = fs.readFileSync(path.join(migrationsDir, '202611210004_phase1_seed.
 const seedEntry = fs.readFileSync(path.resolve('supabase/seed.sql'), 'utf8');
 const integration = fs.readFileSync(path.resolve('supabase/tests/phase1_rls.sql'), 'utf8');
 const privateAccessIntegration = fs.readFileSync(path.resolve('supabase/tests/private_data_access.sql'), 'utf8');
+const clubMembershipRlsFix = fs.readFileSync(
+  path.resolve('supabase/migrations/202611220002_fix_club_membership_rls_recursion.sql'),
+  'utf8',
+);
 
 test('Phase 1 creates every requested domain table', () => {
   const tables = [
@@ -89,11 +93,12 @@ test('Database RLS integration test exercises sensitive data, DMs, blocks, and c
 });
 
 test('Database private-data test covers cross-user writes, RPCs, views, and anon access', () => {
-  assert.match(privateAccessIntegration, /select plan\(33\)/);
+  assert.match(privateAccessIntegration, /select plan\(34\)/);
   for (const assertion of [
     'user A cannot select user B wellness',
     'user A cannot select user B cycle entries',
     'user A cannot select user B memories',
+    'authenticated club members can read the roster without recursive RLS',
     'user A update attempt on user B wellness does not error',
     'user A update attempt on user B cycle entries does not error',
     'user A update attempt on user B memories does not error',
@@ -113,6 +118,14 @@ test('Database private-data test covers cross-user writes, RPCs, views, and anon
   ]) {
     assert.ok(privateAccessIntegration.includes(assertion), `missing database assertion: ${assertion}`);
   }
+});
+
+test('Club roster RLS avoids recursive policy evaluation', () => {
+  assert.match(clubMembershipRlsFix, /security definer\s+set search_path = pg_catalog, public, auth, pg_temp/i);
+  assert.match(clubMembershipRlsFix, /auth\.uid\(\) is not null[\s\S]*?auth\.role\(\) = 'authenticated'/i);
+  assert.match(clubMembershipRlsFix, /revoke all on function private\.is_club_member\(uuid\) from public, anon, authenticated/i);
+  assert.match(clubMembershipRlsFix, /grant execute on function private\.is_club_member\(uuid\) to authenticated/i);
+  assert.match(clubMembershipRlsFix, /for select\s+to authenticated\s+using/i);
 });
 
 test('Signup auto-creates a profile, consent row and student role', () => {
