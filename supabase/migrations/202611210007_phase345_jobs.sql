@@ -1,18 +1,18 @@
-create extension if not exists pg_cron;
+create extension if not exists pg_cron with schema pg_catalog;
 
 do $$
 begin
-  begin
+  if exists (
+    select 1
+    from cron.job
+    where jobname = 'sakhi-daily-nudges'
+  ) then
     perform cron.unschedule('sakhi-daily-nudges');
-  exception when undefined_table then null;
   end;
 
-  begin
-    perform cron.schedule(
-      'sakhi-daily-nudges',
-      '0 9 * * *',
-      'select public.create_daily_nudges();'
-    );
-  exception when undefined_table then null;
-  end;
+  perform cron.schedule(
+    'sakhi-daily-nudges',
+    '0 9 * * *',
+    'select public.create_daily_nudges();'
+  );
 end $$;
