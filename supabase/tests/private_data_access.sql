@@ -1,7 +1,7 @@
 -- Cross-user, anonymous, RPC, and view access tests.
 -- Run against the local Supabase database with: supabase test db
 begin;
-select plan(33);
+select plan(34);
 
 insert into auth.users (
   id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -74,6 +74,11 @@ insert into public.club_members(club_id, user_id)
 values (
   '10000000-0000-4000-8000-000000000001',
   'b1111111-1111-4111-8111-111111111111'
+);
+insert into public.club_members(club_id, user_id)
+values (
+  '10000000-0000-4000-8000-000000000001',
+  'a1111111-1111-4111-8111-111111111111'
 );
 insert into public.event_registrations(event_id, user_id)
 values (
@@ -154,6 +159,11 @@ select is(
   (select count(*)::integer from public.sakhi_memories where user_id = 'b1111111-1111-4111-8111-111111111111'),
   0,
   'user A cannot select user B memories'
+);
+select is(
+  (select count(*)::integer from public.club_members where user_id = 'b1111111-1111-4111-8111-111111111111'),
+  1,
+  'authenticated club members can read the roster without recursive RLS'
 );
 
 select lives_ok(
