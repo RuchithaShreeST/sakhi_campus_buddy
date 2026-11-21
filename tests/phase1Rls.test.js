@@ -7,6 +7,7 @@ const migrationsDir = path.resolve('supabase/migrations');
 const core = fs.readFileSync(path.join(migrationsDir, '202611210002_phase1_core_schema.sql'), 'utf8');
 const rls = fs.readFileSync(path.join(migrationsDir, '202611210003_phase1_rls.sql'), 'utf8');
 const seed = fs.readFileSync(path.join(migrationsDir, '202611210004_phase1_seed.sql'), 'utf8');
+const integration = fs.readFileSync(path.resolve('supabase/tests/phase1_rls.sql'), 'utf8');
 
 test('Phase 1 creates every requested domain table', () => {
   const tables = [
@@ -61,6 +62,27 @@ test('Cycle and memory writes require matching consent rows', () => {
 test('Direct messages are participant-only and blocked users cannot send', () => {
   assert.match(rls, /create policy "dms participants read"[\s\S]*?auth\.uid\(\) = sender_id or auth\.uid\(\) = recipient_id/);
   assert.match(rls, /create policy "dms sender insert"[\s\S]*?public\.is_blocked\(sender_id, recipient_id\)/);
+});
+
+test('Database RLS integration test exercises sensitive data, DMs, blocks, and consent', () => {
+  assert.match(integration, /select plan\(29\)/);
+  for (const assertion of [
+    'owner can read own wellness rows',
+    'admin cannot read another user wellness rows',
+    'admin cannot read another user cycle rows',
+    'admin cannot read another user memory rows',
+    'moderator cannot read another user wellness rows',
+    'moderator cannot read another user cycle rows',
+    'moderator cannot read another user memory rows',
+    'DM participant cannot read messages from conversations they are not in',
+    'a block prevents sending a direct message',
+    'cycle entry insert fails without explicit consent',
+    'memory insert fails without explicit consent',
+    'withdrawing cycle consent deletes cycle rows',
+    'withdrawing memory consent deletes memory rows',
+  ]) {
+    assert.ok(integration.includes(assertion), `missing database assertion: ${assertion}`);
+  }
 });
 
 test('Signup auto-creates a profile, consent row and student role', () => {
