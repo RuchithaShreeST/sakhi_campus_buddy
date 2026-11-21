@@ -9,6 +9,7 @@ const rls = fs.readFileSync(path.join(migrationsDir, '202611210003_phase1_rls.sq
 const seed = fs.readFileSync(path.join(migrationsDir, '202611210004_phase1_seed.sql'), 'utf8');
 const seedEntry = fs.readFileSync(path.resolve('supabase/seed.sql'), 'utf8');
 const integration = fs.readFileSync(path.resolve('supabase/tests/phase1_rls.sql'), 'utf8');
+const privateAccessIntegration = fs.readFileSync(path.resolve('supabase/tests/private_data_access.sql'), 'utf8');
 
 test('Phase 1 creates every requested domain table', () => {
   const tables = [
@@ -84,6 +85,33 @@ test('Database RLS integration test exercises sensitive data, DMs, blocks, and c
     'withdrawing memory consent deletes memory rows',
   ]) {
     assert.ok(integration.includes(assertion), `missing database assertion: ${assertion}`);
+  }
+});
+
+test('Database private-data test covers cross-user writes, RPCs, views, and anon access', () => {
+  assert.match(privateAccessIntegration, /select plan\(33\)/);
+  for (const assertion of [
+    'user A cannot select user B wellness',
+    'user A cannot select user B cycle entries',
+    'user A cannot select user B memories',
+    'user A update attempt on user B wellness does not error',
+    'user A update attempt on user B cycle entries does not error',
+    'user A update attempt on user B memories does not error',
+    'user A delete attempt on user B wellness does not error',
+    'user A delete attempt on user B cycle entries does not error',
+    'user A delete attempt on user B memories does not error',
+    'user B wellness rows remain after user A delete attempts',
+    'user B cycle rows remain after user A delete attempts',
+    'user B memory rows remain after user A delete attempts',
+    'wellness summary RPC returns only caller rows',
+    'today RPC returns only caller wellness rows',
+    'no public view exposes wellness, cycle, or memory rows',
+    'admin cannot read another user wellness',
+    'moderator cannot read another user memories',
+    'anon cannot read rows from private tables, including opted-in profiles',
+    'anon cannot execute any security-definer function',
+  ]) {
+    assert.ok(privateAccessIntegration.includes(assertion), `missing database assertion: ${assertion}`);
   }
 });
 
