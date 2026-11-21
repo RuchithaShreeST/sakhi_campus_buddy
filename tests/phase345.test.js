@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const migration = fs.readFileSync(path.resolve('supabase/migrations/202611210006_phase345_backend.sql'), 'utf8');
+const hardeningMigration = fs.readFileSync(path.resolve('supabase/migrations/202611210009_privileged_function_hardening.sql'), 'utf8');
 const chat = fs.readFileSync(path.resolve('supabase/functions/sakhi-chat/index.ts'), 'utf8');
 const safety = fs.readFileSync(path.resolve('supabase/functions/_shared/safety.ts'), 'utf8');
 
@@ -17,6 +18,8 @@ test('Event registration supports capacity and waitlist', () => {
   assert.match(migration, /active_count >= event_capacity/);
   assert.match(migration, /result='waitlisted'/);
   assert.match(migration, /result='registered'/);
+  assert.match(hardeningMigration, /for update;/i);
+  assert.match(hardeningMigration, /revoke insert, update, delete on public\.event_registrations/i);
 });
 
 test('Blocked users cannot connect and report spam is throttled', () => {
@@ -33,8 +36,8 @@ test('Realtime includes direct messages and notifications', () => {
 test('Sakhi chat requires JWT, validates input and applies rate limits', () => {
   assert.match(chat, /requireUser/);
   assert.match(chat, /moderateInput/);
-  assert.match(chat, /request_count/);
-  assert.match(chat, /count > 20/);
+  assert.match(chat, /rpc\("consume_sakhi_ai_rate_limit"\)/);
+  assert.match(hardeningMigration, /return v_request_count <= 20/);
 });
 
 test('Crisis detection links Tele-MANAS and real-person support', () => {
@@ -47,6 +50,17 @@ test('AI chat never diagnoses or prescribes and uses consented context', () => {
   assert.match(chat, /Never diagnose medical conditions or prescribe medication/);
   assert.match(chat, /ai_memory_opt_in/);
   assert.match(chat, /cycle_tracking_opt_in/);
+  assert.doesNotMatch(chat, /\.from\("wellness_logs"\)/);
+  assert.match(chat, /Could not read consented Sakhi context/);
+});
+
+test('Privileged SQL functions are guarded and execute only for required roles', () => {
+  assert.match(hardeningMigration, /security definer\s+set search_path = pg_catalog, public, auth, pg_temp/i);
+  assert.match(hardeningMigration, /revoke all on function public\.create_daily_nudges\(\) from public, anon, authenticated/i);
+  assert.match(hardeningMigration, /grant execute on function public\.create_daily_nudges\(\) to postgres/i);
+  assert.match(hardeningMigration, /auth\.uid\(\) is null or auth\.role\(\) <> 'authenticated'/i);
+  assert.match(hardeningMigration, /security invoker/i);
+  assert.match(hardeningMigration, /Only the consent owner may change discoverability/);
 });
 
 test('Wellness summary is owner-only and explainable', () => {

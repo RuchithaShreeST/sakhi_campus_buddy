@@ -94,39 +94,52 @@ Deno.serve(async (request) => {
     return jsonResponse(request, 400, { error: moderation.reason });
   }
 
-  const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
-  const { data: limitRows } = await client
-    .from("sakhi_ai_rate_limits")
-    .select("window_start, request_count")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  let count = 1;
-  let windowStart = new Date().toISOString();
-  if (limitRows && limitRows.window_start >= oneMinuteAgo) {
-    count = limitRows.request_count + 1;
+  const { data: allowed, error: rateLimitError } = await client.rpc("consume_sakhi_ai_rate_limit");
+  if (rateLimitError || typeof allowed !== "boolean") {
+    return jsonResponse(request, 503, { error: "Sakhi is temporarily unavailable" });
   }
-  if (count > 20) {
+  if (!allowed) {
     return jsonResponse(request, 429, { error: "Too many Sakhi requests. Please wait a minute." });
   }
-  await client.from("sakhi_ai_rate_limits").upsert({
-    user_id: user.id,
-    window_start: limitRows && limitRows.window_start >= oneMinuteAgo ? limitRows.window_start : windowStart,
-    request_count: count,
-  });
 
-  const [{ data: consents }, { data: logs }, { data: memories }, { data: cycles }] = await Promise.all([
-    client.from("consents").select("ai_memory_opt_in,cycle_tracking_opt_in,discovery_visible").eq("user_id", user.id).maybeSingle(),
-    client.from("wellness_logs").select("logged_on,mood,sleep_hours,water_ml,steps,exercise_minutes").eq("user_id", user.id).order("logged_on", { ascending: false }).limit(30),
-    consentsForMemory(client, user.id),
-    consentsForCycle(client, user.id),
-  ]);
+  const { data: consents, error: consentError } = await client
+    .from("consents")
+    .select("ai_memory_opt_in,cycle_tracking_opt_in")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (consentError) {
+    return jsonResponse(request, 500, { error: "Could not read privacy settings" });
+  }
+
+  let memories = [];
+  let cycles = [];
+  if (consents?.ai_memory_opt_in) {
+    const result = await client
+      .from("sakhi_memories")
+      .select("label,value")
+      .eq("user_id", user.id)
+      .limit(8);
+    if (result.error) {
+      return jsonResponse(request, 500, { error: "Could not read consented Sakhi context" });
+    }
+    memories = result.data ?? [];
+  }
+  if (consents?.cycle_tracking_opt_in) {
+    const result = await client
+      .from("cycle_entries")
+      .select("start_date,end_date,flow,symptoms")
+      .eq("user_id", user.id)
+      .order("start_date", { ascending: false })
+      .limit(10);
+    if (result.error) {
+      return jsonResponse(request, 500, { error: "Could not read consented Sakhi context" });
+    }
+    cycles = result.data ?? [];
+  }
 
   const context = {
-    consents,
-    wellness_logs: logs ?? [],
-    memories: (consents as { ai_memory_opt_in?: boolean } | null)?.ai_memory_opt_in ? memories : [],
-    cycle_entries: (consents as { cycle_tracking_opt_in?: boolean } | null)?.cycle_tracking_opt_in ? cycles : [],
+    memories,
+    cycle_entries: cycles,
   };
 
   const crisis = detectCrisis(body.message);
@@ -170,16 +183,13 @@ Deno.serve(async (request) => {
     });
   }
 
-  await client.from("sakhi_conversations").insert({
-    user_id: user.id,
-    role: "user",
-    message: body.message,
-  });
-  await client.from("sakhi_conversations").insert({
-    user_id: user.id,
-    role: "assistant",
-    message: text,
-  });
+  const { error: conversationError } = await client.from("sakhi_conversations").insert([
+    { user_id: user.id, role: "user", message: body.message },
+    { user_id: user.id, role: "assistant", message: text },
+  ]);
+  if (conversationError) {
+    return jsonResponse(request, 500, { error: "Could not save this conversation" });
+  }
 
   return jsonResponse(request, 200, {
     message: text,
@@ -187,17 +197,3 @@ Deno.serve(async (request) => {
     crisis_support: crisisSupport,
   });
 });
-
-async function consentsForMemory(client: any, userId: string) {
-  const consent = await client.from("consents").select("ai_memory_opt_in").eq("user_id", userId).maybeSingle();
-  if (!consent.data?.ai_memory_opt_in) return [];
-  const result = await client.from("sakhi_memories").select("label,value").eq("user_id", userId).limit(8);
-  return result.data ?? [];
-}
-
-async function consentsForCycle(client: any, userId: string) {
-  const consent = await client.from("consents").select("cycle_tracking_opt_in").eq("user_id", userId).maybeSingle();
-  if (!consent.data?.cycle_tracking_opt_in) return [];
-  const result = await client.from("cycle_entries").select("start_date,end_date,flow,symptoms").eq("user_id", userId).order("start_date", { ascending: false }).limit(10);
-  return result.data ?? [];
-}
