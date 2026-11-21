@@ -1,6 +1,6 @@
 # Sakhi Project Status Audit
 
-**Audit date:** 2026-11-21
+**Audit date:** 2026-11-21; security follow-up updated 2026-11-22
 **Repository:** `C:\cherry\sakhi_campus_buddy-main\sakhi_campus_buddy-main`
 **Branch at initial audit:** `main`
 **Scope:** Read-only audit of the repository as it exists on the audit date. The only file created for this task is this report; no code was changed and no commit was made.
@@ -9,9 +9,9 @@
 
 This report began as a baseline audit. A subsequent security-hardening pass has fixed the consent defaults, SQL function permissions, export scope, account deletion cascades, root package advisories, and missing SQL RLS test coverage described below. The web frontend remains a **local demo**: `VITE_DATA_MODE` defaults to `local`, and every method in `src/data/adapters/supabase.ts` remains a stub.
 
-The backend migrations and Edge Functions still have not been verified against a running Supabase database. The new SQL integration tests are in place, but `supabase test db` could not connect to local Postgres (`127.0.0.1:54322`, `ECONNREFUSED`); Docker was unavailable.
+All migrations now apply successfully to the local Supabase database, and all 68 pgTAP assertions pass there. A hosted/staging Supabase project and deployed Edge Functions have not been verified.
 
-**Current launch verdict: NO — do not put real students or real sensitive data on this build.** The root package now reports zero npm audit findings, but Supabase integration/RLS remains unverified, the web adapter is still stubbed, and browser-local sensitive data is not encrypted.
+**Current launch verdict: NO — do not put real students or real sensitive data on this build.** Local database security tests pass, but the web adapter is still stubbed, hosted Supabase integration is unverified, and browser-local sensitive data is not encrypted.
 
 ## Security hardening follow-up (current state)
 
@@ -27,6 +27,10 @@ This addendum is the current evidence for security, dependency, export, deletion
 | `cc4217f` | Cascade account deletion through user data and add a database deletion completeness test. |
 | `0c74ee7` | Isolate the old Expo app under `legacy-expo/`, remove its dependencies from the maintained web package, and apply compatible dependency security updates. |
 | `6ed158b` | Replace table-existence-only RLS checks with pgTAP integration scenarios. |
+| `b9c839e`, `84cd7e7`, `0de62d0` | Make pg_cron scheduling idempotent, correct its guard syntax, and replace a psql-only seed include with valid SQL. |
+| `5973949` | Correct pgTAP table assertion signatures and the DM fixture's expected count. |
+| `7442b0b` | Fix `get_sakhi_today()` date arithmetic with a new migration. |
+| `dd90f2a`, `9bd4719`, `8c27a3b`, `4a70e2f`, `df0231c`, `76570be`, `d798fe9` | Add live cross-user/anon tests; fix recursive club membership RLS, moderator policy scope, and anonymous profile discovery. |
 
 No changes have been pushed. The working branch is `security-hardening`.
 
@@ -35,11 +39,12 @@ No changes have been pushed. The working branch is `security-hardening`.
 | Area | Current status and evidence |
 |---|---|
 | Consent defaults | Implemented in `supabase/migrations/202611210008_privacy_consent_defaults.sql`; AI memory, cycle tracking and discoverability are opt-in for new and existing records. Static tests in `tests/phase2AuthPrivacy.test.js` pass. |
-| Consent withdrawal | Database trigger deletes cycle entries and AI memories when their consent is withdrawn; local adapter behavior is also tested. Database behavior is not yet verified by executing migrations. |
-| Privileged SQL functions | Migration `202611210009_privileged_function_hardening.sql` applies explicit search paths, caller checks, and restricted execute grants, and prefers invoker rights where feasible. Static source tests pass; runtime SQL permissions have not been exercised against Postgres. |
+| Consent withdrawal | Database trigger deletes cycle entries and AI memories when their consent is withdrawn; local and live-local pgTAP tests pass. |
+| Privileged SQL functions | Migration `202611210009_privileged_function_hardening.sql` applies explicit search paths, caller checks, and restricted execute grants, and prefers invoker rights where feasible. Live-local tests verify anon cannot execute security-definer functions and sensitive RPCs. |
 | Export | Export scope now includes the user-owned data domains and is paginated. `Data export covers every SQL table with a user_id column` passes in `tests/phase2AuthPrivacy.test.js`. |
-| Account deletion | `supabase/migrations/202611210011_account_deletion_cascades.sql` relies on cascades and nulls retained audit/role references. `supabase/tests/account_deletion.sql` dynamically checks all public tables with a `user_id` column; the database test has not run. |
-| RLS integration tests | `supabase/tests/phase1_rls.sql` contains 29 pgTAP assertions for owner access, admin/moderator denial on wellness/cycle/memories, DM participants, blocks, consent-gated writes, and deletion on consent withdrawal. The matching Node guard passes, but SQL execution is **BLOCKED / UNVERIFIED** because local Postgres is unavailable. |
+| Account deletion | `supabase/migrations/202611210011_account_deletion_cascades.sql` relies on cascades and nulls retained audit/role references. `supabase/tests/account_deletion.sql` passed all 3 live-local assertions, including the dynamic check across tables with `user_id`. |
+| RLS integration tests | `supabase/tests/phase1_rls.sql` (29 assertions) and `supabase/tests/private_data_access.sql` (36 assertions) passed, along with the 3 account-deletion assertions: **68 passed, 0 failed** using `npx supabase test db` against the local database. Coverage includes cross-user SELECT/UPDATE/DELETE, sensitive RPC/view access, anon table/function access, and admin/moderator denial. |
+| Migration fixes | Local reset exposed and fixed the pg_cron unschedule guard, psql-only seed include, `date - bigint` streak calculation, recursive club-membership policy, anon-invoked moderator policies, and anon access to discoverable profiles. Database policy/RPC fixes are separate migrations; the unapplied cron migration and seed script were corrected in place. |
 | Dependencies | `npm audit --omit=dev` and full `npm audit` both report **0 vulnerabilities** for the root web package after `npm audit fix`. The old Expo app is separated in `legacy-expo/package.json`; it is unsupported and its dependencies are outside the root audit/install graph. Do not treat the archived app as production-safe. |
 
 ### Current validation evidence
@@ -48,18 +53,20 @@ No changes have been pushed. The working branch is `security-hardening`.
 |---|---|
 | `npm run typecheck` | Pass |
 | `npm run lint` | Pass |
-| `npm test` | Pass: 60 Node tests and 2 component tests |
+| `npm test` | Pass: 65 Node tests and 2 component tests |
 | `npm run build` | Pass |
 | `npm run test:e2e` | Pass: 1 Playwright flow |
 | `npm audit --omit=dev` | Pass: 0 findings |
 | `npm audit` | Pass: 0 findings in the root package |
-| `npx supabase test db` | **Blocked:** failed to connect to `127.0.0.1:54322` (`ECONNREFUSED`). No SQL integration assertion ran. |
+| `npx supabase start` | Pass after the migration and seed fixes. |
+| `npx supabase db reset` | Pass; all migrations through `202611220004` and the SQL seed completed. |
+| `npx supabase test db` | Pass: 68 assertions, 0 failures across 3 SQL test files. |
 
 ### Remaining launch blockers
 
 1. Keep the application local-demo-only until all web Supabase repository methods are implemented and tested against staging.
-2. Start a local Supabase stack or provide a staging project, then apply migrations and run both `supabase/tests/phase1_rls.sql` and `supabase/tests/account_deletion.sql`. Do not claim RLS/deletion verification until those SQL tests pass.
-3. Verify the complete auth, consent, export, deletion, and chat flows against a real Supabase project; no live database or Edge Function verification is evidenced here.
+2. Apply the migrations and run the SQL suite against a staging Supabase project; current database evidence is local-only.
+3. Verify the complete auth, consent, export, deletion, and chat flows against a hosted Supabase project; Edge Function deployment and live provider behavior remain unverified.
 4. Sensitive browser-local data remains unencrypted; do not collect real wellness, cycle, chat, or identity data in local mode.
 5. `legacy-expo/` is archived and unsupported. Its separate dependency tree is not included in the root npm audit result.
 
