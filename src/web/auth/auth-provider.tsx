@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { ProfileRow } from '@/types/database';
 import type { AuthUser, PasswordResetRequestResult, SignUpResult } from '@/data/contracts';
-import { dataMode, repositories } from '@/data/repositories';
+import { repositories } from '@/data/repositories';
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryKey: SESSION_QUERY_KEY,
     queryFn: async () => {
       const user = await repositories.auth.currentUser();
-      const profile = user && dataMode === 'local' ? await repositories.profile.get() : null;
+      const profile = user ? await repositories.profile.get() : null;
       return { user, profile };
     },
   });
@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     const current = await repositories.auth.signIn(email, password);
-    const updatedProfile = dataMode === 'local' ? await repositories.profile.get() : null;
+    const updatedProfile = await repositories.profile.get();
     queryClient.setQueryData(SESSION_QUERY_KEY, { user: current, profile: updatedProfile });
     setPendingEmail(null);
     setDemoVerificationCode(null);
@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyEmail = useCallback(async (code: string) => {
     const current = await repositories.auth.verifyEmail(code);
-    const updatedProfile = dataMode === 'local' ? await repositories.profile.get() : null;
+    const updatedProfile = await repositories.profile.get();
     queryClient.setQueryData(SESSION_QUERY_KEY, { user: current, profile: updatedProfile });
     setPendingEmail(null);
     setDemoVerificationCode(null);

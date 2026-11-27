@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 
-import type { AuthRepository, SakhiRepositories } from '../contracts';
-import type { Database } from '@/types/database';
+import type { AuthRepository, ConsentRepository, ProfileRepository, SakhiRepositories } from '../contracts';
+import type { Database, ProfileUpdate } from '@/types/database';
 import { browserPreferences } from './preferences.ts';
 
 const PENDING_SIGNUP_EMAIL_KEY = 'sakhi.auth.pending-signup-email';
@@ -21,12 +21,107 @@ function throwIfError(error: { message: string } | null): void {
   if (error) throw new Error(error.message);
 }
 
+async function requireUserId(client: SupabaseClient<Database>): Promise<string> {
+  const { data, error } = await client.auth.getUser();
+  throwIfError(error);
+  if (!data.user) throw new Error('Sign in before accessing your Sakhi profile.');
+  return data.user.id;
+}
+
 function toAuthUser(user: User): { id: string; email: string; emailVerified: boolean } {
   if (!user.email) throw new Error('Supabase returned an account without an email address.');
   return {
     id: user.id,
     email: user.email,
     emailVerified: Boolean(user.email_confirmed_at),
+  };
+}
+
+export function createSupabaseProfileRepository(client: SupabaseClient<Database>): ProfileRepository {
+  return {
+    get: async () => {
+      const userId = await requireUserId(client);
+      const { data, error } = await client.from('profiles').select('*').eq('id', userId).maybeSingle();
+      throwIfError(error);
+      return data;
+    },
+    save: async (changes) => {
+      const userId = await requireUserId(client);
+      const update: ProfileUpdate = {};
+      if (changes.display_name !== undefined) update.display_name = changes.display_name;
+      if (changes.pronouns !== undefined) update.pronouns = changes.pronouns;
+      if (changes.bio !== undefined) update.bio = changes.bio;
+      if (changes.avatar_url !== undefined) update.avatar_url = changes.avatar_url;
+      if (changes.campus_name !== undefined) update.campus_name = changes.campus_name;
+      if (changes.course !== undefined) update.course = changes.course;
+      if (changes.year !== undefined) update.year = changes.year;
+      if (changes.city !== undefined) update.city = changes.city;
+      if (changes.interests !== undefined) update.interests = changes.interests;
+      if (changes.looking_for !== undefined) update.looking_for = changes.looking_for;
+      const { data, error } = await client
+        .from('profiles')
+        .update(update)
+        .eq('id', userId)
+        .select('*')
+        .maybeSingle();
+      throwIfError(error);
+      if (!data) throw new Error('Your Sakhi profile was not found. Please sign out and sign in again.');
+      return data;
+    },
+    listCampuses: async () => {
+      const { data, error } = await client
+        .from('campuses')
+        .select('*')
+        .is('deleted_at', null)
+        .order('name');
+      throwIfError(error);
+      return data ?? [];
+    },
+    listInterests: async () => {
+      const userId = await requireUserId(client);
+      const { data, error } = await client
+        .from('interests')
+        .select('*')
+        .eq('user_id', userId)
+        .is('deleted_at', null)
+        .order('interest_name');
+      throwIfError(error);
+      return data ?? [];
+    },
+    listInterestOptions: async () => [
+      'Study groups',
+      'Creative projects',
+      'Wellbeing',
+      'Technology',
+      'Sports',
+      'Arts and culture',
+      'Career growth',
+      'Community',
+    ],
+  };
+}
+
+export function createSupabaseConsentRepository(client: SupabaseClient<Database>): ConsentRepository {
+  return {
+    get: async () => {
+      const userId = await requireUserId(client);
+      const { data, error } = await client.from('consents').select('*').eq('user_id', userId).maybeSingle();
+      throwIfError(error);
+      if (!data) throw new Error('Your privacy preferences could not be found. Please sign out and sign in again.');
+      return data;
+    },
+    update: async (changes) => {
+      const userId = await requireUserId(client);
+      const { data, error } = await client
+        .from('consents')
+        .update(changes)
+        .eq('user_id', userId)
+        .select('*')
+        .maybeSingle();
+      throwIfError(error);
+      if (!data) throw new Error('Your privacy preferences could not be found. Please sign out and sign in again.');
+      return data;
+    },
   };
 }
 
@@ -158,12 +253,12 @@ const auth: AuthRepository = client
 export const supabaseRepositories: SakhiRepositories = {
   preferences: browserPreferences,
   auth,
-  profile: {
-    get: async () => unavailable(),
-    save: async () => unavailable(),
-    listCampuses: async () => unavailable(),
-    listInterests: async () => unavailable(),
-    listInterestOptions: async () => unavailable(),
+  profile: client ? createSupabaseProfileRepository(client) : {
+    get: async () => authUnavailable(),
+    save: async () => authUnavailable(),
+    listCampuses: async () => authUnavailable(),
+    listInterests: async () => authUnavailable(),
+    listInterestOptions: async () => authUnavailable(),
   },
   wellness: {
     listLogs: async () => unavailable(),
@@ -238,9 +333,9 @@ export const supabaseRepositories: SakhiRepositories = {
     getPreferences: async () => unavailable(),
     updatePreferences: async () => unavailable(),
   },
-  consents: {
-    get: async () => unavailable(),
-    update: async () => unavailable(),
+  consents: client ? createSupabaseConsentRepository(client) : {
+    get: async () => authUnavailable(),
+    update: async () => authUnavailable(),
   },
   account: {
     exportData: async () => unavailable(),

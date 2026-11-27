@@ -3,7 +3,11 @@ import { test } from 'node:test';
 
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../src/types/database.ts';
-import { createSupabaseAuthRepository } from '../src/data/adapters/supabase.ts';
+import {
+  createSupabaseAuthRepository,
+  createSupabaseConsentRepository,
+  createSupabaseProfileRepository,
+} from '../src/data/adapters/supabase.ts';
 
 type TestStorage = {
   getItem(key: string): string | null;
@@ -48,7 +52,7 @@ async function waitForEmailCode(email: string, sentAfter: number, timeoutMs = 20
 
 const runIntegration = process.env.SAKHI_RUN_SUPABASE_INTEGRATION === '1';
 
-test('Supabase auth signs up, verifies, restores sessions, resets passwords, and signs out', {
+test('Supabase auth and onboarding work with verified accounts and private consent defaults', {
   skip: !runIntegration && 'Run npm run test:integration:auth against the local Supabase stack.',
   timeout: 90_000,
 }, async () => {
@@ -82,6 +86,36 @@ test('Supabase auth signs up, verifies, restores sessions, resets passwords, and
   await auth.signOut();
   assert.equal(await auth.currentUser(), null);
   assert.equal((await auth.signIn(email, initialPassword)).id, verified.id);
+
+  const profiles = createSupabaseProfileRepository(client);
+  const consents = createSupabaseConsentRepository(client);
+  const [campuses, interestOptions, initialProfile, initialConsents] = await Promise.all([
+    profiles.listCampuses(),
+    profiles.listInterestOptions(),
+    profiles.get(),
+    consents.get(),
+  ]);
+  assert.ok(campuses.some((campus) => campus.name === 'Sakhi Demo Campus'));
+  assert.ok(interestOptions.includes('Technology'));
+  assert.equal(initialProfile?.display_name, '');
+  assert.deepEqual(
+    [initialConsents.ai_memory_opt_in, initialConsents.cycle_tracking_opt_in, initialConsents.discovery_visible],
+    [false, false, false],
+  );
+  const savedProfile = await profiles.save({
+    display_name: 'Integration Demo',
+    campus_name: 'Sakhi Demo Campus',
+    course: 'Demo program',
+    year: '1',
+    interests: ['Technology'],
+    looking_for: ['Study buddy'],
+  });
+  assert.equal(savedProfile.display_name, 'Integration Demo');
+  assert.equal(savedProfile.campus_name, 'Sakhi Demo Campus');
+  const updatedConsents = await consents.update({ discovery_visible: true });
+  assert.equal(updatedConsents.discovery_visible, true);
+  assert.equal((await profiles.get())?.discovery_visible, true);
+  await consents.update({ discovery_visible: false });
 
   const restoredClient = createClient<Database>(url, anonKey, {
     auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: true, storage: authStorage },
