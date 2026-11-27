@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 
-import type { AuthRepository, PasswordResetResult, SakhiRepositories } from '../contracts';
+import type { AuthRepository, SakhiRepositories } from '../contracts';
 import type { Database } from '@/types/database';
 import { browserPreferences } from './preferences.ts';
 
@@ -94,21 +94,27 @@ export function createSupabaseAuthRepository(
       clearPendingSignupEmail();
       return toAuthUser(data.user);
     },
-    resetPassword: async (email, newPassword): Promise<PasswordResetResult> => {
-      if (newPassword === undefined) {
-        const redirectTo = origin ? new URL('/reset-password?mode=update', origin).toString() : undefined;
-        const { error } = await client.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo });
-        throwIfError(error);
-        return { status: 'email_sent' };
-      }
-
+    requestPasswordReset: async (email) => {
+      const { error } = await client.auth.resetPasswordForEmail(email.trim().toLowerCase());
+      throwIfError(error);
+      return {};
+    },
+    verifyPasswordReset: async (email, code) => {
+      const { data, error } = await client.auth.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token: code.trim(),
+        type: 'recovery',
+      });
+      throwIfError(error);
+      if (!data.user || !data.session) throw new Error('Supabase did not return a password recovery session.');
+    },
+    updatePassword: async (newPassword) => {
       if (newPassword.length < 8) throw new Error('Use a password with at least 8 characters.');
       const { data: sessionData, error: sessionError } = await client.auth.getSession();
       throwIfError(sessionError);
-      if (!sessionData.session) throw new Error('Open the password-reset link from your email before choosing a new password.');
+      if (!sessionData.session) throw new Error('Verify the password-reset code from your email before choosing a new password.');
       const { error } = await client.auth.updateUser({ password: newPassword });
       throwIfError(error);
-      return { status: 'updated' };
     },
     signOut: async () => {
       const { error } = await client.auth.signOut({ scope: 'local' });
@@ -142,7 +148,9 @@ const auth: AuthRepository = client
       signUp: async () => authUnavailable(),
       signIn: async () => authUnavailable(),
       verifyEmail: async () => authUnavailable(),
-      resetPassword: async () => authUnavailable(),
+      requestPasswordReset: async () => authUnavailable(),
+      verifyPasswordReset: async () => authUnavailable(),
+      updatePassword: async () => authUnavailable(),
       signOut: async () => authUnavailable(),
       currentUser: async () => authUnavailable(),
     };

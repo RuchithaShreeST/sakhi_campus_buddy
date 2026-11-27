@@ -260,6 +260,7 @@ function createInitialState(): LocalState {
 }
 
 let memoryState: LocalState | null = null;
+let pendingPasswordReset: { email: string; code: string; expiresAt: number; verified: boolean } | null = null;
 
 function getState(): LocalState {
   if (memoryState) return memoryState;
@@ -562,25 +563,50 @@ export const localRepositories: SakhiRepositories = {
       saveState(state);
       return user;
     },
-    resetPassword: async (email, newPassword) => {
+    requestPasswordReset: async (email) => {
       await latency();
-      const credential = getState().authCredentials.find((item) => item.email === email.trim().toLowerCase());
-      if (!credential) {
-        throw new Error('No local demo account exists for that email.');
+      const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 900000 + 100000);
+      pendingPasswordReset = {
+        email: email.trim().toLowerCase(),
+        code,
+        expiresAt: Date.now() + 10 * 60 * 1000,
+        verified: false,
+      };
+      return { demoVerificationCode: code };
+    },
+    verifyPasswordReset: async (email, code) => {
+      await latency();
+      if (
+        !pendingPasswordReset ||
+        pendingPasswordReset.email !== email.trim().toLowerCase() ||
+        pendingPasswordReset.expiresAt < Date.now() ||
+        pendingPasswordReset.verified ||
+        pendingPasswordReset.code !== code.trim()
+      ) {
+        throw new Error('That password reset code is not valid or has expired.');
       }
-      if (newPassword === undefined) return { status: 'ready_to_update' };
+      pendingPasswordReset.verified = true;
+    },
+    updatePassword: async (newPassword) => {
+      await latency();
       if (newPassword.length < 8) throw new Error('Use a password with at least 8 characters.');
+      if (!pendingPasswordReset?.verified || pendingPasswordReset.expiresAt < Date.now()) {
+        throw new Error('Verify the password reset code before choosing a new password.');
+      }
+      const credential = getState().authCredentials.find((item) => item.email === pendingPasswordReset?.email);
+      if (!credential) throw new Error('The password reset could not be completed.');
       const salt = crypto.randomUUID();
       credential.salt = salt;
       credential.passwordHash = await digestPassword(newPassword, salt);
       saveState(getState());
-      return { status: 'updated' };
+      pendingPasswordReset = null;
     },
     signOut: async () => {
       await latency();
       const state = getState();
       state.authUser = null;
       saveState(state);
+      pendingPasswordReset = null;
     },
     currentUser: async () => {
       await latency();
@@ -1116,6 +1142,7 @@ export const localRepositories: SakhiRepositories = {
 
 export function resetLocalAdapterForTests() {
   memoryState = null;
+  pendingPasswordReset = null;
   if (typeof window !== 'undefined') {
     window.localStorage.removeItem(STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_STORAGE_KEY);

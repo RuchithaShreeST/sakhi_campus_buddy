@@ -41,16 +41,17 @@ export type SignUpResult = {
   demoVerificationCode?: string;
 };
 
-export type PasswordResetResult =
-  | { status: 'email_sent' }
-  | { status: 'ready_to_update' }
-  | { status: 'updated' };
+export type PasswordResetRequestResult = {
+  demoVerificationCode?: string;
+};
 
 export interface AuthRepository {
   signUp(email: string, password: string): Promise<SignUpResult>;
   signIn(email: string, password: string): Promise<AuthUser>;
   verifyEmail(code: string): Promise<AuthUser>;
-  resetPassword(email: string, newPassword?: string): Promise<PasswordResetResult>;
+  requestPasswordReset(email: string): Promise<PasswordResetRequestResult>;
+  verifyPasswordReset(email: string, code: string): Promise<void>;
+  updatePassword(newPassword: string): Promise<void>;
   signOut(): Promise<void>;
   currentUser(): Promise<AuthUser | null>;
 }

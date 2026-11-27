@@ -114,11 +114,27 @@ test('local auth verifies email, preserves the user id, and updates the password
   await localRepositories.auth.signOut();
   await assert.equal((await localRepositories.auth.signIn(email, password)).id, verified.id);
 
-  const reset = await localRepositories.auth.resetPassword(email, 'new-demo-password');
-  assert.deepEqual(reset, { status: 'updated' });
+  const reset = await localRepositories.auth.requestPasswordReset(email);
+  assert.match(reset.demoVerificationCode ?? '', /^\d{6}$/);
+  await localRepositories.auth.verifyPasswordReset(email, reset.demoVerificationCode!);
+  await assert.rejects(
+    localRepositories.auth.verifyPasswordReset(email, reset.demoVerificationCode!),
+    /not valid or has expired/
+  );
+  await localRepositories.auth.updatePassword('new-demo-password');
   await localRepositories.auth.signOut();
   await assert.rejects(localRepositories.auth.signIn(email, password), /incorrect/);
   assert.equal((await localRepositories.auth.signIn(email, 'new-demo-password')).id, verified.id);
+});
+
+test('local password reset requests use the same response shape for known and unknown emails', async () => {
+  const email = 'known@example.test';
+  await localRepositories.auth.signUp(email, 'safe-demo-password');
+  const known = await localRepositories.auth.requestPasswordReset(email);
+  const unknown = await localRepositories.auth.requestPasswordReset('unknown@example.test');
+  assert.deepEqual(Object.keys(known), Object.keys(unknown));
+  assert.match(known.demoVerificationCode ?? '', /^\d{6}$/);
+  assert.match(unknown.demoVerificationCode ?? '', /^\d{6}$/);
 });
 
 test('local wellness summary excludes empty seed logs and bounds the score', async () => {

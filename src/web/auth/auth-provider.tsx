@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { ProfileRow } from '@/types/database';
-import type { AuthUser, PasswordResetResult, SignUpResult } from '@/data/contracts';
+import type { AuthUser, PasswordResetRequestResult, SignUpResult } from '@/data/contracts';
 import { dataMode, repositories } from '@/data/repositories';
 
 type AuthContextValue = {
@@ -15,7 +15,9 @@ type AuthContextValue = {
   signIn(email: string, password: string): Promise<void>;
   signUp(email: string, password: string): Promise<SignUpResult>;
   verifyEmail(code: string): Promise<void>;
-  resetPassword(email: string, newPassword?: string): Promise<PasswordResetResult>;
+  requestPasswordReset(email: string): Promise<PasswordResetRequestResult>;
+  verifyPasswordReset(email: string, code: string): Promise<void>;
+  updatePassword(newPassword: string): Promise<void>;
   signOut(): Promise<void>;
   deleteAccount(): Promise<void>;
   saveOnboarding(profile: Partial<ProfileRow>, consent: { ai_memory_opt_in: boolean; cycle_tracking_opt_in: boolean; discovery_visible: boolean }): Promise<void>;
@@ -68,8 +70,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setDemoVerificationCode(null);
   }, [queryClient]);
 
-  const resetPassword = useCallback(async (email: string, newPassword?: string): Promise<PasswordResetResult> => {
-    return repositories.auth.resetPassword(email, newPassword);
+  const requestPasswordReset = useCallback(async (email: string) => {
+    return repositories.auth.requestPasswordReset(email);
+  }, []);
+
+  const verifyPasswordReset = useCallback(async (email: string, code: string) => {
+    await repositories.auth.verifyPasswordReset(email, code);
+  }, []);
+
+  const updatePassword = useCallback(async (newPassword: string) => {
+    await repositories.auth.updatePassword(newPassword);
   }, []);
 
   const signOut = useCallback(async () => {
@@ -108,12 +118,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signIn,
     signUp,
     verifyEmail,
-    resetPassword,
+    requestPasswordReset,
+    verifyPasswordReset,
+    updatePassword,
     signOut,
     deleteAccount,
     saveOnboarding,
     reloadSession,
-  }), [user, profile, session.isLoading, error, pendingEmail, demoVerificationCode, signIn, signUp, verifyEmail, resetPassword, signOut, deleteAccount, saveOnboarding, reloadSession]);
+  }), [user, profile, session.isLoading, error, pendingEmail, demoVerificationCode, signIn, signUp, verifyEmail, requestPasswordReset, verifyPasswordReset, updatePassword, signOut, deleteAccount, saveOnboarding, reloadSession]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

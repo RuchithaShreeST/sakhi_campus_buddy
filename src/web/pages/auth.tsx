@@ -101,16 +101,16 @@ export function VerifyEmailPage() {
 }
 
 export function ResetPasswordPage() {
-  const { resetPassword } = useAuth();
+  const { requestPasswordReset, verifyPasswordReset, updatePassword } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
+  const [demoVerificationCode, setDemoVerificationCode] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [localResetReady, setLocalResetReady] = useState(false);
-  const isRecovery = new URLSearchParams(location.search).get('mode') === 'update' || localResetReady;
+  const [codeRequested, setCodeRequested] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -118,14 +118,19 @@ export function ResetPasswordPage() {
     setError(null);
     setMessage(null);
     try {
-      const result = await resetPassword(email, isRecovery ? password : undefined);
-      if (result.status === 'email_sent') {
-        setMessage('If that address is registered, a reset link is on its way. Open it to choose a new password.');
-      } else if (result.status === 'ready_to_update') {
-        setLocalResetReady(true);
-        setMessage('Local demo account found. Choose a new password below.');
+      if (!codeRequested) {
+        const result = await requestPasswordReset(email);
+        setDemoVerificationCode(result.demoVerificationCode ?? null);
+        setCodeRequested(true);
+        setMessage('If that address is registered, a reset code is on its way. Enter the code and choose a new password.');
       } else {
+        await verifyPasswordReset(email, code);
+        await updatePassword(password);
         setMessage('Your password has been updated. You can now sign in with it.');
+        setCodeRequested(false);
+        setCode('');
+        setPassword('');
+        setDemoVerificationCode(null);
       }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'We could not reset that password.');
@@ -136,14 +141,20 @@ export function ResetPasswordPage() {
 
   return (
     <AuthLayout>
-      <PageHeading eyebrow="Account access" title="Reset password" description="Request a secure reset link, then choose a new password. Local demo mode uses the same steps without sending email." />
+      <PageHeading eyebrow="Account access" title="Reset password" description="Request a one-time code, then use it to choose a new password. Codes expire and can only be used once." />
       <Card>
         <form className="space-y-4" onSubmit={submit}>
-          {!isRecovery && <div><FieldLabel htmlFor="reset-email">Email</FieldLabel><TextInput id="reset-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></div>}
-          {isRecovery && <div><FieldLabel htmlFor="reset-new-password">New password</FieldLabel><TextInput id="reset-new-password" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} /></div>}
+          <div><FieldLabel htmlFor="reset-email">Email</FieldLabel><TextInput id="reset-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></div>
+          {codeRequested && (
+            <>
+              <div><FieldLabel htmlFor="reset-code">Reset code</FieldLabel><TextInput id="reset-code" autoComplete="one-time-code" inputMode="numeric" minLength={6} maxLength={6} required value={code} onChange={(event) => setCode(event.target.value)} /></div>
+              <div><FieldLabel htmlFor="reset-new-password">New password</FieldLabel><TextInput id="reset-new-password" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} /></div>
+            </>
+          )}
           {error && <InlineMessage>{error}</InlineMessage>}
           {message && <InlineMessage tone="success">{message}</InlineMessage>}
-          <Button className="w-full" disabled={busy}>{busy ? 'Please wait…' : isRecovery ? 'Update password' : 'Send reset link'}</Button>
+          {demoVerificationCode && <InlineMessage tone="info">Local demo code: <strong className="ml-1 tracking-widest">{demoVerificationCode}</strong>. No email was sent.</InlineMessage>}
+          <Button className="w-full" disabled={busy}>{busy ? 'Please wait…' : codeRequested ? 'Verify code and update password' : 'Send reset code'}</Button>
         </form>
         <button type="button" className="mt-3 min-h-11 font-semibold text-sakhi-rose" onClick={() => navigate('/auth')}>Back to sign in</button>
       </Card>

@@ -90,18 +90,15 @@ test('Supabase auth signs up, verifies, restores sessions, resets passwords, and
   assert.equal((await restoredAuth.currentUser())?.id, verified.id);
 
   const resetRequestedAt = Date.now();
-  assert.deepEqual(await auth.resetPassword(email), { status: 'email_sent' });
+  const knownEmailResponse = await auth.requestPasswordReset(email);
+  const unknownEmailResponse = await auth.requestPasswordReset(`unknown-${Date.now()}@example.test`);
+  assert.deepEqual(knownEmailResponse, unknownEmailResponse);
   const recoveryCode = await waitForEmailCode(email, resetRequestedAt);
-  const { data: recoveryData, error: recoveryError } = await client.auth.verifyOtp({
-    email,
-    token: recoveryCode,
-    type: 'recovery',
-  });
-  if (recoveryError) throw new Error(recoveryError.message);
-  assert.equal(recoveryData.user?.id, verified.id);
-  assert.deepEqual(await auth.resetPassword(email, newPassword), { status: 'updated' });
+  await auth.verifyPasswordReset(email, recoveryCode);
+  await auth.updatePassword(newPassword);
 
   await auth.signOut();
   await assert.rejects(auth.signIn(email, initialPassword));
   assert.equal((await auth.signIn(email, newPassword)).id, verified.id);
+  await auth.signOut();
 });
