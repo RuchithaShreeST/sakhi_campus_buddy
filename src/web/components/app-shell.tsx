@@ -16,7 +16,7 @@ import {
 import { OfflineBanner } from './offline-banner';
 import { Button } from './ui';
 import { cn } from '../lib/cn';
-import { repositories } from '@/data/repositories';
+import { demoMode, repositories } from '@/data/repositories';
 import { useQuery } from '@tanstack/react-query';
 
 const navigation = [
@@ -41,6 +41,7 @@ export function AppShell() {
 
   return (
     <div className={cn('min-h-screen bg-sakhi-background text-sakhi-ink', theme === 'dark' && 'dark')} data-theme={theme}>
+      {demoMode && <div role="status" className="bg-sakhi-lavender/40 px-4 py-2 text-center text-sm font-medium text-sakhi-ink">Demo mode: changes are saved only in this browser.</div>}
       <OfflineBanner />
       <div className="mx-auto flex min-h-[calc(100vh-40px)] max-w-[1600px]">
         <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-sakhi-border bg-sakhi-surface px-5 py-6 lg:flex">

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 
+import { demoMode } from '@/data/repositories';
 import { useAuth } from './auth-provider';
 import { Card, Button, Skeleton } from '../components/ui';
 import type { ProfileRow } from '@/types/database';
@@ -20,6 +21,7 @@ function SessionError({ message, retry }: { message: string; retry: () => void }
 export function RequireSession() {
   const { user, loading, error, reloadSession } = useAuth();
   const location = useLocation();
+  if (demoMode) return <Navigate to="/" replace />;
   if (loading) return <SessionLoading />;
   if (error) return <SessionError message={error} retry={() => void reloadSession()} />;
   return user ? <Outlet /> : <Navigate to="/auth" replace state={{ from: location.pathname }} />;
@@ -27,6 +29,7 @@ export function RequireSession() {
 
 export function RequireProfile() {
   const { user, profile, loading, error, reloadSession } = useAuth();
+  if (demoMode) return <Outlet />;
   if (loading) return <SessionLoading />;
   if (error) return <SessionError message={error} retry={() => void reloadSession()} />;
   if (!user) return <Navigate to="/auth" replace />;
@@ -35,6 +38,7 @@ export function RequireProfile() {
 
 export function PublicOnly({ children }: { children: ReactNode }) {
   const { user, profile, loading, error, reloadSession } = useAuth();
+  if (demoMode) return <Navigate to="/" replace />;
   if (loading) return <SessionLoading />;
   if (error) return <SessionError message={error} retry={() => void reloadSession()} />;
   if (user) return <Navigate to={hasCompletedOnboarding(profile) ? '/' : '/onboarding'} replace />;

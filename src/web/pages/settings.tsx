@@ -3,7 +3,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import type { NotificationPreferences } from '@/data/contracts';
-import { repositories } from '@/data/repositories';
+import { demoMode, repositories } from '@/data/repositories';
 import { useAuth } from '../auth/auth-provider';
 import { Button, Card, FieldLabel, InlineMessage, PageHeading, Skeleton, TextInput } from '../components/ui';
 
@@ -125,7 +125,7 @@ export function SettingsPage() {
 
         <Card><h2 className="text-lg font-bold text-sakhi-ink">Your data</h2><p className="mt-1 text-sm leading-5 text-sakhi-muted">Export downloads the records associated with your local profile as JSON.</p><div className="mt-4 flex flex-wrap gap-3"><Button variant="secondary" disabled={exportMutation.isPending} onClick={() => exportMutation.mutate()}>{exportMutation.isPending ? 'Preparing export…' : 'Export my data'}</Button><Link to="/privacy" className="inline-flex min-h-11 items-center rounded-xl px-3 font-semibold text-sakhi-rose underline">Read privacy information</Link></div></Card>
 
-        <Card className="border-rose-200"><h2 className="text-lg font-bold text-sakhi-ink">Sign out or delete account</h2><p className="mt-1 text-sm leading-5 text-sakhi-muted">Deleting removes Sakhi local profile, health entries, memories, chats, plans, credentials, and app theme settings from this browser.</p><div className="mt-4 flex flex-wrap gap-3"><Button variant="secondary" onClick={() => void handleSignOut()}>Sign out</Button><Button className="bg-rose-700 hover:bg-rose-800" onClick={() => void handleDelete()}>Delete my demo account</Button></div></Card>
+        <Card className="border-rose-200"><h2 className="text-lg font-bold text-sakhi-ink">{demoMode ? 'Demo data' : 'Sign out or delete account'}</h2><p className="mt-1 text-sm leading-5 text-sakhi-muted">Deleting removes Sakhi local profile, health entries, memories, chats, plans, credentials, and app theme settings from this browser.</p><div className="mt-4 flex flex-wrap gap-3">{!demoMode && <Button variant="secondary" onClick={() => void handleSignOut()}>Sign out</Button>}<Button className="bg-rose-700 hover:bg-rose-800" onClick={() => void handleDelete()}>{demoMode ? 'Clear demo data' : 'Delete my demo account'}</Button></div></Card>
       </div>
     </div>
   );

@@ -54,7 +54,11 @@ configuration, and live service integrations are completed and verified.
    npm run web
    ```
 
-   The web app defaults to local demo mode (`VITE_DATA_MODE=local`). The Supabase web adapter is currently a typed stub; do not select `supabase` expecting a live connection yet.
+   The web app defaults to the local adapter. To open the main app directly in a clearly labelled, no-sign-in demo, run:
+   ```bash
+   npm run demo
+   ```
+   Demo changes stay in this browser. Normal `npm run start` retains the configured sign-in flow; Supabase support is limited to the domains implemented in the adapters.
 
 4. The archived native Expo reference can be run separately:
    ```bash
@@ -86,9 +90,10 @@ configuration, and live service integrations are completed and verified.
 | `EXPO_PUBLIC_SAKHI_API_URL` | Public API URL for Sakhi backend / AI proxy endpoint |
 | `EXPO_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase publishable anonymous key |
-| `VITE_DATA_MODE` | Web data adapter (`local` by default; `supabase` is not implemented yet) |
-| `VITE_SUPABASE_URL` | Reserved for the future web adapter; currently unused |
-| `VITE_SUPABASE_ANON_KEY` | Reserved for the future web adapter; currently unused |
+| `VITE_DATA_MODE` | Web data adapter (`local` by default; `supabase` for implemented domains) |
+| `VITE_DEMO_MODE` | Set to `true` with local data to skip sign-in and open the demo app |
+| `VITE_SUPABASE_URL` | Supabase project URL for implemented web adapters |
+| `VITE_SUPABASE_ANON_KEY` | Supabase public anon key for implemented web adapters |
 | `AI_PROVIDER` | AI service provider (e.g. Gemini, OpenAI) |
 | `AI_API_KEY` | Server-side private API key for AI provider |
 
